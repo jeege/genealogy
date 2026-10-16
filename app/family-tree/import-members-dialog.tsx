@@ -23,7 +23,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Upload, Download, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { batchCreateFamilyMembers, type ImportMemberInput } from "./actions";
+import { batchCreateFamilyMembers, previewFamilyMembersImport } from "./actions";
+import { parseImportRows, type ImportFatherMatch, type ImportMemberInput } from "./member-import";
 import { FAMILY_SURNAME } from "@/lib/utils";
 
 interface ImportMembersDialogProps {
@@ -34,11 +35,15 @@ export function ImportMembersDialog({ onSuccess }: ImportMembersDialogProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
   const [parsedData, setParsedData] = React.useState<ImportMemberInput[]>([]);
+  const [fatherMatches, setFatherMatches] = React.useState<ImportFatherMatch[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const uploadVersion = React.useRef(0);
 
   const resetState = () => {
+    uploadVersion.current += 1;
     setParsedData([]);
+    setFatherMatches([]);
     setError(null);
     setIsLoading(false);
     if (fileInputRef.current) {
@@ -56,6 +61,19 @@ export function ImportMembersDialog({ onSuccess }: ImportMembersDialogProps) {
   // 下载模板
   const handleDownloadTemplate = () => {
     const ws = XLSX.utils.json_to_sheet([
+      {
+        姓名: `${FAMILY_SURNAME}父名`,
+        世代: 19,
+        排行: 1,
+        父亲姓名: "",
+        性别: "男",
+        官职: "",
+        是否在世: "是",
+        配偶: "",
+        生平事迹: "",
+        生日: "1965-01-01",
+        居住地: "某地",
+      },
       {
         姓名: `${FAMILY_SURNAME}某某`,
         世代: 20,
@@ -82,49 +100,38 @@ export function ImportMembersDialog({ onSuccess }: ImportMembersDialogProps) {
 
     setIsLoading(true);
     setError(null);
+    setParsedData([]);
+    setFatherMatches([]);
+    const version = ++uploadVersion.current;
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
         const bstr = evt.target?.result;
         const wb = XLSX.read(bstr, { type: "binary" });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws);
+        const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+        const formattedData = parseImportRows(data);
+        const result = await previewFamilyMembersImport(formattedData);
+        if (version !== uploadVersion.current) return;
+        if (result.error) throw new Error(result.error);
 
-        if (data.length === 0) {
-          setError("文件中没有数据");
-          setIsLoading(false);
-          return;
-        }
-
-        const formattedData: ImportMemberInput[] = (data as Record<string, string | number>[]).map((row) => {
-          return {
-            name: String(row["姓名"] || ""),
-            generation: row["世代"] ? Number(row["世代"]) : null,
-            sibling_order: row["排行"] ? Number(row["排行"]) : null,
-            father_name: row["父亲姓名"] ? String(row["父亲姓名"]) : null,
-            gender: (row["性别"] === "女" ? "女" : "男") as "男" | "女",
-            official_position: row["官职"] ? String(row["官职"]) : null,
-            is_alive: row["是否在世"] === "否" ? false : true, 
-            spouse: row["配偶"] ? String(row["配偶"]) : null,
-            remarks: row["生平事迹"] ? String(row["生平事迹"]) : (row["备注"] ? String(row["备注"]) : null),
-            birthday: row["生日"] ? String(row["生日"]) : null,
-            residence_place: row["居住地"] ? String(row["居住地"]) : null,
-          };
-        }).filter(item => item.name); 
-
-        if (formattedData.length === 0) {
-          setError("未找到有效的成员数据，请检查表头是否正确");
-        } else {
-          setParsedData(formattedData);
-        }
+        setParsedData(formattedData);
+        setFatherMatches(result.fathers);
       } catch (err) {
         console.error(err);
-        setError("解析文件失败，请确保文件格式正确");
+        if (version === uploadVersion.current) {
+          setError(err instanceof Error ? err.message : "解析文件失败，请确保文件格式正确");
+        }
       } finally {
-        setIsLoading(false);
+        if (version === uploadVersion.current) setIsLoading(false);
       }
+    };
+    reader.onerror = () => {
+      if (version !== uploadVersion.current) return;
+      setError("读取文件失败，请重新选择文件");
+      setIsLoading(false);
     };
     reader.readAsBinaryString(file);
   };
@@ -134,15 +141,25 @@ export function ImportMembersDialog({ onSuccess }: ImportMembersDialogProps) {
     if (parsedData.length === 0) return;
 
     setIsLoading(true);
-    const result = await batchCreateFamilyMembers(parsedData);
-    setIsLoading(false);
-
-    if (result.success) {
-      alert(`成功导入 ${result.count} 条记录`);
-      setIsOpen(false);
-      onSuccess?.();
-    } else {
-      setError(`导入失败: ${result.error}`);
+    setError(null);
+    try {
+      const result = await batchCreateFamilyMembers(parsedData);
+      if (result.success) {
+        alert(`成功导入 ${result.count} 条记录`);
+        handleOpenChange(false);
+        onSuccess?.();
+      } else {
+        setError(`导入失败: ${result.error}`);
+        if (result.count > 0) {
+          setParsedData([]);
+          setFatherMatches([]);
+          onSuccess?.();
+        }
+      }
+    } catch {
+      setError("导入请求失败，请核对成员列表后重试");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -159,6 +176,7 @@ export function ImportMembersDialog({ onSuccess }: ImportMembersDialogProps) {
           <DialogTitle>批量导入成员</DialogTitle>
           <DialogDescription>
             请先下载模板，填写数据后上传。支持 Excel (.xlsx, .xls) 和 CSV 格式。
+            父亲按姓名及上一世代匹配，可填写已有成员或同一文件中的成员。
           </DialogDescription>
         </DialogHeader>
 
@@ -192,9 +210,8 @@ export function ImportMembersDialog({ onSuccess }: ImportMembersDialogProps) {
               <div className="bg-muted p-2 text-sm text-muted-foreground flex justify-between items-center">
                 <span>预览 ({parsedData.length} 条记录)</span>
                 {parsedData.some(m => m.father_name) && (
-                  <span className="text-xs text-amber-600 flex items-center">
-                    <AlertCircle className="h-3 w-3 mr-1" />
-                    注意：父亲姓名将自动匹配现有数据库，如果匹配失败则留空
+                  <span className="text-xs text-muted-foreground">
+                    父亲关联已按姓名和世代检查
                   </span>
                 )}
               </div>
@@ -217,6 +234,11 @@ export function ImportMembersDialog({ onSuccess }: ImportMembersDialogProps) {
                         <TableCell>{member.generation}</TableCell>
                         <TableCell className={member.father_name ? "text-primary" : "text-muted-foreground"}>
                           {member.father_name || "-"}
+                          {member.father_name && (
+                            <div className="text-xs text-muted-foreground">
+                              第 {member.generation! - 1} 世 · {fatherMatches[i]?.source === "existing" ? "已有成员" : "本次导入"}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell>{member.gender}</TableCell>
                         <TableCell>{member.birthday || "-"}</TableCell>
@@ -231,7 +253,7 @@ export function ImportMembersDialog({ onSuccess }: ImportMembersDialogProps) {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => setIsOpen(false)}>
+          <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isLoading}>
             取消
           </Button>
           <Button onClick={handleImport} disabled={parsedData.length === 0 || isLoading}>

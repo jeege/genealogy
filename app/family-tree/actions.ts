@@ -2,6 +2,16 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import {
+  importMemberKey,
+  normalizeImportMembers,
+  resolveImportFathers,
+  type ImportFatherCandidate,
+  type ImportFatherMatch,
+  type ImportMemberInput,
+} from "./member-import";
+
+export type { ImportMemberInput } from "./member-import";
 
 export interface FamilyMember {
   id: number;
@@ -236,82 +246,146 @@ export async function updateFamilyMember(
   return { success: true, error: null };
 }
 
-export interface ImportMemberInput {
-  name: string;
-  generation?: number | null;
-  sibling_order?: number | null;
-  father_name?: string | null; // 导入时使用姓名匹配
-  gender?: "男" | "女" | null;
-  official_position?: string | null;
-  is_alive?: boolean;
-  spouse?: string | null;
-  remarks?: string | null;
-  birthday?: string | null;
-  residence_place?: string | null;
+async function prepareMemberImport(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  input: ImportMemberInput[]
+) {
+  const members = normalizeImportMembers(input);
+  const fatherNames = Array.from(
+    new Set(members.map((member) => member.father_name).filter((name): name is string => !!name))
+  );
+  const existingMembers: ImportFatherCandidate[] = [];
+
+  // 分批、分页读取，避免 URL 过长或查询行数上限漏掉同名候选人。
+  for (let offset = 0; offset < fatherNames.length; offset += 100) {
+    for (let from = 0; ;) {
+      const { data, count, error } = await supabase
+        .from("family_members")
+        .select("id, name, generation", { count: "exact" })
+        .in("name", fatherNames.slice(offset, offset + 100))
+        .order("id", { ascending: true })
+        .range(from, from + 199);
+
+      if (error) throw new Error(`查询父亲信息失败：${error.message}`);
+      if (count === null || !data || (data.length === 0 && from < count)) {
+        throw new Error("未能读取完整的父亲候选信息，请重试");
+      }
+      existingMembers.push(...(data || []));
+      from += data.length;
+      if (from >= count) break;
+    }
+  }
+
+  return { members, fathers: resolveImportFathers(members, existingMembers) };
+}
+
+// 上传后即检查父亲关联；真正导入前再次查询，避免使用过期的预览结果。
+export async function previewFamilyMembersImport(
+  members: ImportMemberInput[]
+): Promise<{ fathers: ImportFatherMatch[]; error: string | null }> {
+  try {
+    const supabase = await createClient();
+    const prepared = await prepareMemberImport(supabase, members);
+    return { fathers: prepared.fathers, error: null };
+  } catch (error) {
+    return { fathers: [], error: error instanceof Error ? error.message : "检查父亲关联失败" };
+  }
 }
 
 export async function batchCreateFamilyMembers(
-  members: ImportMemberInput[]
+  input: ImportMemberInput[]
 ): Promise<{ success: boolean; count: number; error: string | null }> {
   const supabase = await createClient();
+  const insertedBatches: number[][] = [];
+  let untrackedCount = 0;
 
-  // 1. 提取所有不为空的父亲姓名
-  const fatherNames = Array.from(
-    new Set(
-      members
-        .map((m) => m.father_name?.trim())
-        .filter((n): n is string => !!n)
-    )
-  );
+  try {
+    const { members, fathers } = await prepareMemberImport(supabase, input);
+    const generations = new Map<number, number[]>();
+    const importedIds = new Map<string, number>();
 
-  // 2. 批量查找父亲 ID
-  const fatherMap: Record<string, number> = {};
-  if (fatherNames.length > 0) {
-    const { data: foundFathers } = await supabase
-      .from("family_members")
-      .select("id, name")
-      .in("name", fatherNames);
+    members.forEach((member, index) => {
+      const generation = member.generation ?? 0;
+      const indices = generations.get(generation) || [];
+      indices.push(index);
+      generations.set(generation, indices);
+    });
 
-    if (foundFathers) {
-      foundFathers.forEach((f) => {
-        // 注意：如果有重名，这里会覆盖，简单起见取最后一个。
-        // 实际场景可能需要更复杂的匹配逻辑（如结合世代）
-        fatherMap[f.name] = f.id;
-      });
+    // 先插入父辈并读取真实 ID，再写入子女；不依赖模板行顺序或数据库返回顺序。
+    for (const generation of Array.from(generations.keys()).sort((a, b) => a - b)) {
+      const indices = generations.get(generation)!;
+      for (let offset = 0; offset < indices.length; offset += 200) {
+        const payload = indices.slice(offset, offset + 200).map((index) => {
+          const member = members[index];
+          const father = fathers[index];
+          let fatherId: number | null = null;
+          if (father?.source === "existing") {
+            fatherId = father.id;
+          } else if (father?.source === "import") {
+            const importedFather = members[father.index];
+            const id = importedIds.get(importMemberKey(importedFather.name, importedFather.generation));
+            if (id === undefined) throw new Error(`未取得「${member.father_name}」的父亲 ID，导入已停止`);
+            fatherId = id;
+          }
+
+          return {
+            name: member.name,
+            generation: member.generation,
+            sibling_order: member.sibling_order,
+            father_id: fatherId,
+            gender: member.gender,
+            official_position: member.official_position,
+            is_alive: member.is_alive ?? true,
+            spouse: member.spouse,
+            remarks: member.remarks,
+            birthday: member.birthday,
+            residence_place: member.residence_place,
+          };
+        });
+
+        const { data, error } = await supabase
+          .from("family_members")
+          .insert(payload)
+          .select("id, name, generation");
+
+        if (error) throw new Error(error.message);
+        insertedBatches.push((data || []).map((member) => member.id));
+        if (!data || data.length !== payload.length) {
+          untrackedCount += Math.max(0, payload.length - (data?.length ?? 0));
+          throw new Error("未能取得全部新成员 ID，请检查数据库返回条数限制");
+        }
+        for (const member of data) {
+          importedIds.set(importMemberKey(member.name, member.generation), member.id);
+        }
+      }
     }
-  }
 
-  // 3. 构建插入数据
-  const insertPayload = members.map((m) => {
-    let father_id: number | null = null;
-    if (m.father_name && fatherMap[m.father_name.trim()]) {
-      father_id = fatherMap[m.father_name.trim()];
+    revalidatePath("/family-tree", "layout");
+    return { success: true, count: members.length, error: null };
+  } catch (error) {
+    // 多代导入发生错误时，按子女到父辈的顺序清理本次新增数据。
+    let remainingCount = untrackedCount;
+    for (const ids of insertedBatches.reverse()) {
+      if (ids.length === 0) continue;
+      try {
+        const { data, count, error: rollbackError } = await supabase
+          .from("family_members")
+          .delete({ count: "exact" })
+          .in("id", ids)
+          .select("id");
+        remainingCount += rollbackError ? ids.length : Math.max(0, ids.length - (count ?? data?.length ?? 0));
+      } catch {
+        remainingCount += ids.length;
+      }
     }
-
+    if (insertedBatches.length > 0) revalidatePath("/family-tree", "layout");
+    const message = error instanceof Error ? error.message : "导入失败，请稍后重试";
     return {
-      name: m.name,
-      generation: m.generation,
-      sibling_order: m.sibling_order,
-      father_id: father_id,
-      gender: m.gender,
-      official_position: m.official_position,
-      is_alive: m.is_alive ?? true,
-      spouse: m.spouse,
-      remarks: m.remarks,
-      birthday: m.birthday,
-      residence_place: m.residence_place,
+      success: false,
+      count: remainingCount,
+      error: remainingCount > 0 ? `${message}；仍有 ${remainingCount} 条本次新增记录未能撤销，请核对后再导入` : message,
     };
-  });
-
-  // 4. 批量插入
-  const { error } = await supabase.from("family_members").insert(insertPayload);
-
-  if (error) {
-    return { success: false, count: 0, error: error.message };
   }
-
-  revalidatePath("/family-tree", "layout");
-  return { success: true, count: members.length, error: null };
 }
 
 export async function fetchMembersForTimeline(): Promise<
