@@ -1,5 +1,7 @@
 "use server";
 
+import { fetchAllRows } from "@/lib/supabase/fetch-all-rows";
+import type { FamilyMember } from "../actions";
 import { createClient } from "@/lib/supabase/server";
 
 export interface StatisticsData {
@@ -17,16 +19,18 @@ export async function fetchFamilyStatistics(): Promise<{
 }> {
   const supabase = await createClient();
 
-  // Fetch only necessary fields for statistics to improve performance
-  const { data: members, error } = await supabase
-    .from("family_members")
-    .select("id, name, gender, generation, is_alive, birthday")
-    .order("generation", { ascending: true });
+  // 完整加载统计所需字段后再计算各分类。
+  const { data: members, error } = await fetchAllRows<
+    Pick<FamilyMember, "id" | "name" | "gender" | "generation" | "is_alive" | "birthday">
+  >((from, to) =>
+    supabase.from("family_members")
+      .select("id, name, gender, generation, is_alive, birthday", { count: "exact" })
+      .order("generation", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to)
+  );
 
-  if (error || !members) {
-    console.error("Error fetching statistics data:", error);
-    return { data: null, error: error?.message || "Failed to fetch data" };
-  }
+  if (error) return { data: null, error };
 
   const totalMembers = members.length;
 

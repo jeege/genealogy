@@ -1,30 +1,11 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
-import Module from "node:module";
-import { fileURLToPath } from "node:url";
 import { test } from "node:test";
-import ts from "typescript";
 import XLSX from "xlsx";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// 使用项目已有的 TypeScript 编译器隔离 Server Action，不连接真实数据库。
-function loadTypeScript(relativePath, mocks = {}) {
-  const filename = path.resolve(__dirname, "..", relativePath);
-  const compiled = ts.transpileModule(fs.readFileSync(filename, "utf8"), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
-  }).outputText;
-  const loaded = new Module(filename);
-  loaded.filename = filename;
-  loaded.paths = Module._nodeModulePaths(path.dirname(filename));
-  const originalRequire = loaded.require.bind(loaded);
-  loaded.require = (id) => Object.hasOwn(mocks, id) ? mocks[id] : originalRequire(id);
-  loaded._compile(compiled, filename);
-  return loaded.exports;
-}
+import { loadTypeScript } from "./helpers/load-typescript.mjs";
 
 const helpers = loadTypeScript("app/family-tree/member-import.ts");
+const pager = loadTypeScript("lib/supabase/fetch-all-rows.ts");
+const queries = loadTypeScript("app/family-tree/member-queries.ts", { "@/lib/supabase/fetch-all-rows": pager });
 
 function setup(existing = [], options = {}) {
   let rows = existing.map((member) => ({ ...member }));
@@ -82,6 +63,8 @@ function setup(existing = [], options = {}) {
     "@/lib/supabase/server": { createClient: async () => supabase },
     "next/cache": { revalidatePath: (...args) => revalidations.push(args) },
     "./member-import": helpers,
+    "@/lib/supabase/fetch-all-rows": pager,
+    "./member-queries": queries,
   });
   return { actions, inserts, revalidations, ranges, rows: () => rows };
 }

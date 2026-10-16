@@ -3,6 +3,7 @@
 import { useRef, useState, useMemo, useCallback, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { FamilyMemberNode } from "../graph/actions";
+import { getFamilyLinks } from "../graph/family-links";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -110,12 +111,7 @@ export function FamilyForceGraph({ data }: ForceGraphProps) {
       group: member.generation || 0,
     }));
 
-    const links = data
-      .filter((member) => member.father_id)
-      .map((member) => ({
-        source: member.father_id!,
-        target: member.id,
-      }));
+    const links = getFamilyLinks(data);
 
     return { nodes, links };
   }, [data]);

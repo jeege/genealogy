@@ -1,36 +1,28 @@
-import { FamilyMemberNode } from "../graph/actions";
+import type { FamilyMemberNode } from "../graph/actions";
+import { getFamilyLinks } from "../graph/family-links";
 
 /**
- * Finds the shortest path between two members in the family tree using BFS.
- * Treats the graph as undirected (parent <-> child) to allow traversal across branches.
+ * 使用 BFS 查找成员间的最短路径。
+ * 将真实父子连线视为无向边，允许跨支系巡游。
  */
 export function findShortestPath(
   members: FamilyMemberNode[],
   startId: number,
   endId: number
 ): FamilyMemberNode[] | null {
+  const memberMap = new Map(members.map(member => [member.id, member]));
+  if (!memberMap.has(startId) || !memberMap.has(endId)) return null;
+
   if (startId === endId) {
-    const member = members.find((m) => m.id === startId);
-    return member ? [member] : null;
+    return [memberMap.get(startId)!];
   }
 
-  // 1. Build Adjacency List (Undirected)
+  // 1. 只为真实节点和有效父子连线建立双向邻接表。
   const adj = new Map<number, number[]>();
-  const memberMap = new Map<number, FamilyMemberNode>();
-
-  members.forEach((m) => {
-    memberMap.set(m.id, m);
-    if (!adj.has(m.id)) adj.set(m.id, []);
-
-    // Edge to Father
-    if (m.father_id) {
-      // Child -> Father
-      adj.get(m.id)?.push(m.father_id);
-      
-      // Father -> Child
-      if (!adj.has(m.father_id)) adj.set(m.father_id, []);
-      adj.get(m.father_id)?.push(m.id);
-    }
+  members.forEach(member => adj.set(member.id, []));
+  getFamilyLinks(members).forEach(({ source, target }) => {
+    adj.get(source)!.push(target);
+    adj.get(target)!.push(source);
   });
 
   // 2. BFS

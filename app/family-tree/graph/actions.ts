@@ -1,5 +1,6 @@
 "use server";
 
+import { fetchAllRows } from "@/lib/supabase/fetch-all-rows";
 import { createClient } from "@/lib/supabase/server";
 
 export interface FamilyMemberNode {
@@ -26,15 +27,12 @@ export interface FetchGraphResult {
 export async function fetchAllFamilyMembers(): Promise<FetchGraphResult> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("family_members")
-    .select("id, name, generation, sibling_order, father_id, gender, official_position, is_alive, spouse, remarks, birthday, death_date, residence_place")
-    .order("generation", { ascending: true })
-    .order("sibling_order", { ascending: true });
-
-  if (error) {
-    return { data: [], error: error.message };
-  }
-
-  return { data: data || [], error: null };
+  return fetchAllRows<FamilyMemberNode>((from, to) =>
+    supabase.from("family_members")
+      .select("id, name, generation, sibling_order, father_id, gender, official_position, is_alive, spouse, remarks, birthday, death_date, residence_place", { count: "exact" })
+      .order("generation", { ascending: true })
+      .order("sibling_order", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to)
+  );
 }

@@ -1,5 +1,8 @@
 "use server";
 
+import { fetchAllRows } from "@/lib/supabase/fetch-all-rows";
+import { fetchMemberNamesByIds } from "../member-queries";
+import type { FamilyMember } from "../actions";
 import { createClient } from "@/lib/supabase/server";
 
 export interface BiographyMember {
@@ -28,20 +31,21 @@ export async function fetchMembersWithBiography(): Promise<{
     const supabase = await createClient();
 
     // 查询有 remarks 的成员
-    const { data, error } = await supabase
-        .from("family_members")
-        .select("*")
-        .not("remarks", "is", null)
-        .neq("remarks", "")
-        .order("generation", { ascending: true })
-        .order("sibling_order", { ascending: true });
+    const { data, error } = await fetchAllRows<FamilyMember>((from, to) =>
+        supabase.from("family_members")
+            .select("*", { count: "exact" })
+            .not("remarks", "is", null)
+            .neq("remarks", "")
+            .order("generation", { ascending: true })
+            .order("sibling_order", { ascending: true })
+            .order("id", { ascending: true })
+            .range(from, to)
+    );
 
-    if (error) {
-        return { data: [], error: error.message };
-    }
+    if (error) return { data: [], error };
 
     // 过滤掉 remarks 只是空的 JSON 结构的情况
-    const validData = (data || []).filter((item) => {
+    const validData = data.filter((item): item is FamilyMember & { remarks: string } => {
         if (!item.remarks) return false;
         try {
             const parsed = JSON.parse(item.remarks);
@@ -66,18 +70,9 @@ export async function fetchMembersWithBiography(): Promise<{
         .map((item) => item.father_id)
         .filter((id): id is number => id !== null);
 
-    // 批量查询父亲姓名
-    let fatherMap: Record<number, string> = {};
-    if (fatherIds.length > 0) {
-        const { data: fathers } = await supabase
-            .from("family_members")
-            .select("id, name")
-            .in("id", fatherIds);
-
-        if (fathers) {
-            fatherMap = Object.fromEntries(fathers.map((f) => [f.id, f.name]));
-        }
-    }
+    const { data: fathers, error: fatherError } = await fetchMemberNamesByIds(supabase, fatherIds);
+    if (fatherError) return { data: [], error: fatherError };
+    const fatherMap: Record<number, string> = Object.fromEntries(fathers.map((father) => [father.id, father.name]));
 
     // 转换数据格式
     const transformedData: BiographyMember[] = validData.map((item) => ({

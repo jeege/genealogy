@@ -1,5 +1,7 @@
 "use server";
 
+import { fetchAllRows } from "@/lib/supabase/fetch-all-rows";
+import { fetchMemberNamesByIds } from "./member-queries";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import {
@@ -58,6 +60,7 @@ export async function fetchFamilyMembers(
   const { data, count, error } = await query
     .order("generation", { ascending: true })
     .order("sibling_order", { ascending: true })
+    .order("id", { ascending: true })
     .range(from, to);
 
   if (error) {
@@ -69,18 +72,9 @@ export async function fetchFamilyMembers(
     .map((item) => item.father_id)
     .filter((id): id is number => id !== null);
 
-  // 批量查询父亲姓名
-  let fatherMap: Record<number, string> = {};
-  if (fatherIds.length > 0) {
-    const { data: fathers } = await supabase
-      .from("family_members")
-      .select("id, name")
-      .in("id", fatherIds);
-
-    if (fathers) {
-      fatherMap = Object.fromEntries(fathers.map((f) => [f.id, f.name]));
-    }
-  }
+  const { data: fathers, error: fatherError } = await fetchMemberNamesByIds(supabase, fatherIds);
+  if (fatherError) return { data: [], count: 0, error: fatherError };
+  const fatherMap: Record<number, string> = Object.fromEntries(fathers.map((father) => [father.id, father.name]));
 
   // 转换数据格式，添加 father_name
   const transformedData: FamilyMember[] = (data || []).map((item) => ({
@@ -157,23 +151,19 @@ export async function deleteFamilyMembers(
 }
 
 // 获取所有成员用于父亲选择下拉框
-export async function fetchAllMembersForSelect(): Promise<
-  { id: number; name: string; generation: number | null }[]
-> {
+export async function fetchAllMembersForSelect(): Promise<{
+  data: { id: number; name: string; generation: number | null }[];
+  error: string | null;
+}> {
   const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("family_members")
-    .select("id, name, generation")
-    .order("generation", { ascending: true })
-    .order("name", { ascending: true });
-
-  if (error) {
-    console.error("Error fetching members for select:", error);
-    return [];
-  }
-
-  return data || [];
+  return fetchAllRows<Pick<FamilyMember, "id" | "name" | "generation">>((from, to) =>
+    supabase.from("family_members")
+      .select("id, name, generation", { count: "exact" })
+      .order("generation", { ascending: true })
+      .order("name", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to)
+  );
 }
 
 export interface UpdateMemberInput extends CreateMemberInput {
@@ -388,20 +378,16 @@ export async function batchCreateFamilyMembers(
   }
 }
 
-export async function fetchMembersForTimeline(): Promise<
-  { id: number; name: string; birthday: string | null; death_date: string | null; generation: number | null }[]
-> {
+export async function fetchMembersForTimeline(): Promise<{
+  data: { id: number; name: string; birthday: string | null; death_date: string | null; generation: number | null }[];
+  error: string | null;
+}> {
   const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("family_members")
-    .select("id, name, birthday, death_date, generation")
-    .order("birthday", { ascending: true });
-
-  if (error) {
-    console.error("Error fetching timeline data:", error);
-    return [];
-  }
-
-  return data || [];
+  return fetchAllRows<Pick<FamilyMember, "id" | "name" | "birthday" | "death_date" | "generation">>((from, to) =>
+    supabase.from("family_members")
+      .select("id, name, birthday, death_date, generation", { count: "exact" })
+      .order("birthday", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to)
+  );
 }

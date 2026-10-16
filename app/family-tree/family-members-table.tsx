@@ -69,6 +69,7 @@ export function FamilyMembersTable({
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isLoadingParents, setIsLoadingParents] = React.useState(false);
+  const [parentLoadError, setParentLoadError] = React.useState<string | null>(null);
   const [loadingFatherId, setLoadingFatherId] = React.useState<number | null>(null);
 
   const [editingMember, setEditingMember] = React.useState<FamilyMember | null>(null);
@@ -98,14 +99,28 @@ export function FamilyMembersTable({
   // 判断是否为编辑模式
   const isEditMode = editingMember !== null;
 
-  // 加载父亲选择列表
+  // 关闭或重开弹窗后，忽略旧请求的响应并允许重新加载。
   React.useEffect(() => {
-    if (isDialogOpen) {
-      setIsLoadingParents(true);
-      fetchAllMembersForSelect()
-        .then(setParentOptions)
-        .finally(() => setIsLoadingParents(false));
-    }
+    if (!isDialogOpen) return;
+    let cancelled = false;
+    setIsLoadingParents(true);
+    setParentOptions([]);
+    setParentLoadError(null);
+    fetchAllMembersForSelect()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        setParentOptions(error ? [] : data);
+        setParentLoadError(error);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setParentOptions([]);
+        setParentLoadError("父亲列表加载失败，请关闭后重新打开弹窗重试");
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingParents(false);
+      });
+    return () => { cancelled = true; };
   }, [isDialogOpen]);
 
   const updateUrlParams = (params: Record<string, string>) => {
@@ -345,6 +360,7 @@ export function FamilyMembersTable({
                       value={formData.father_id}
                       options={parentOptions}
                       isLoading={isLoadingParents}
+                      disabled={!!parentLoadError}
                       onChange={(value) => {
                         const father = parentOptions.find(p => p.id.toString() === value);
                         const newGeneration = father && father.generation !== null 
@@ -357,6 +373,9 @@ export function FamilyMembersTable({
                         });
                       }}
                     />
+                    {parentLoadError && (
+                      <p role="alert" className="mt-2 text-sm text-destructive">加载数据失败：{parentLoadError}</p>
+                    )}
                   </div>
                 </div>
 

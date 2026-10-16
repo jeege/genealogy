@@ -166,10 +166,11 @@ function getLayoutedElements(
 
   // 添加可见边到 dagre 图
   const edges: Edge[] = [];
+  const visibleMemberIds = new Set(visibleMembers.map(member => member.id));
   visibleMembers.forEach((member) => {
     if (member.father_id) {
       // 确保父节点也在可见列表中
-      const fatherExists = visibleMembers.some((m) => m.id === member.father_id);
+      const fatherExists = visibleMemberIds.has(member.father_id);
       if (fatherExists) {
         dagreGraph.setEdge(String(member.father_id), String(member.id));
 
