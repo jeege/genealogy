@@ -3,20 +3,21 @@ import Link from "next/link";
 import { AuthButton } from "@/components/auth-button";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { MobileNav } from "@/components/mobile-nav";
-import { FAMILY_SURNAME } from "@/lib/utils";
+import { getPublicRuntimeConfig } from "@/lib/runtime-config";
 
 export default function FamilyTreeLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { familySurname } = getPublicRuntimeConfig();
   return (
     <div className="min-h-screen flex flex-col">
       {/* 顶部导航栏 */}
       <header className="border-b">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="font-semibold text-lg hover:opacity-80 transition-opacity">
-            {FAMILY_SURNAME}氏族谱
+            {familySurname}氏族谱
           </Link>
 
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium">

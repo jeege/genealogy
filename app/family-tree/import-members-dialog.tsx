@@ -25,13 +25,14 @@ import { Upload, Download, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { batchCreateFamilyMembers, previewFamilyMembersImport } from "./actions";
 import { parseImportRows, type ImportFatherMatch, type ImportMemberInput } from "./member-import";
-import { FAMILY_SURNAME } from "@/lib/utils";
+import { useRuntimeConfig } from "@/components/runtime-config-provider";
 
 interface ImportMembersDialogProps {
   onSuccess?: () => void;
 }
 
 export function ImportMembersDialog({ onSuccess }: ImportMembersDialogProps) {
+  const { familySurname } = useRuntimeConfig();
   const [isOpen, setIsOpen] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
   const [parsedData, setParsedData] = React.useState<ImportMemberInput[]>([]);
@@ -62,7 +63,7 @@ export function ImportMembersDialog({ onSuccess }: ImportMembersDialogProps) {
   const handleDownloadTemplate = () => {
     const ws = XLSX.utils.json_to_sheet([
       {
-        姓名: `${FAMILY_SURNAME}父名`,
+        姓名: `${familySurname}父名`,
         世代: 19,
         排行: 1,
         父亲姓名: "",
@@ -75,10 +76,10 @@ export function ImportMembersDialog({ onSuccess }: ImportMembersDialogProps) {
         居住地: "某地",
       },
       {
-        姓名: `${FAMILY_SURNAME}某某`,
+        姓名: `${familySurname}某某`,
         世代: 20,
         排行: 1,
-        父亲姓名: `${FAMILY_SURNAME}父名`,
+        父亲姓名: `${familySurname}父名`,
         性别: "男",
         官职: "进士",
         是否在世: "是",

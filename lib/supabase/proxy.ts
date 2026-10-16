@@ -1,24 +1,23 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { hasEnvVars } from "../utils";
+import { getServerSupabaseConfig, getSupabaseCookieName } from "@/lib/runtime-config";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
   });
 
-  // If the env vars are not set, skip proxy check. You can remove this
-  // once you setup the project.
-  if (!hasEnvVars) {
-    return supabaseResponse;
-  }
+  // 健康检查不依赖外部认证服务。
+  if (request.nextUrl.pathname === "/api/health") return supabaseResponse;
+  const config = getServerSupabaseConfig();
 
   // With Fluid compute, don't put this client in a global environment
   // variable. Always create a new one on each request.
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    config.internalUrl ?? config.supabaseUrl,
+    config.supabasePublishableKey,
     {
+      cookieOptions: { name: getSupabaseCookieName(config.supabaseUrl) },
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -57,7 +56,9 @@ export async function updateSession(request: NextRequest) {
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
-    return NextResponse.redirect(url);
+    const response = NextResponse.redirect(url);
+    supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
+    return response;
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is.

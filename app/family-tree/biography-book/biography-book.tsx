@@ -15,7 +15,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { cn, FAMILY_SURNAME } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { useRuntimeConfig } from "@/components/runtime-config-provider";
 import type { BiographyMember } from "./actions";
 import { RichTextViewer } from "@/components/rich-text/viewer";
 
@@ -676,6 +677,7 @@ export function BiographyBook({ members }: BiographyBookProps) {
 
 // 封面组件（使用 memo 避免不必要的重渲染）
 const CoverPage = memo(function CoverPage({ totalPages }: { totalPages: number }) {
+    const { familySurname } = useRuntimeConfig();
     return (
         <div className="w-full h-full bg-gradient-to-br from-amber-900 via-amber-800 to-amber-950 rounded-r-lg shadow-2xl flex flex-col items-center justify-center p-8 relative overflow-hidden">
             {/* 封面装饰纹理 */}
@@ -695,7 +697,7 @@ const CoverPage = memo(function CoverPage({ totalPages }: { totalPages: number }
                     <BookOpen className="w-16 h-16 sm:w-24 sm:h-24 mx-auto text-amber-200/80" />
                 </div>
                 <h1 className="text-4xl sm:text-6xl font-serif font-bold text-amber-100 tracking-widest mb-6 drop-shadow-lg">
-                    {FAMILY_SURNAME}氏生平
+                    {familySurname}氏生平
                 </h1>
                 <div className="h-px w-32 mx-auto bg-gradient-to-r from-transparent via-amber-300/60 to-transparent mb-6" />
                 <p className="text-amber-200/70 text-lg sm:text-xl font-serif tracking-wide">

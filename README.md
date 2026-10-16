@@ -5,12 +5,12 @@
 </p>
 
 <p align="center">
-  一个基于 Next.js 15 和 Supabase 构建的现代化、全中文家族族谱管理系统。
+  一个基于 Next.js 16 和 Supabase 构建的现代化、全中文家族族谱管理系统。
 </p>
 
 ## ✨ 项目亮点
 
-- **前沿技术栈**: 采用最新的 **Next.js 15** (App Router) 和 **React 19**。
+- **前沿技术栈**: 采用最新的 **Next.js 16** (App Router) 和 **React 19**。
 - **全栈无服务**: 后端使用 **Supabase**，提供高性能数据库、身份认证及实时订阅功能。
 - **深度中文化**: 针对中文语境深度定制，包括 UI 文案、日期格式、元数据及字辈统计。
 - **多维可视化 (v2.0升级)**:
@@ -24,7 +24,7 @@
 
 ## 🛠️ 技术栈
 
-- **框架**: [Next.js 15](https://nextjs.org/) (App Router, Server Actions)
+- **框架**: [Next.js 16](https://nextjs.org/) (App Router, Server Actions)
 - **数据库 & 认证**: [Supabase](https://supabase.com/) (PostgreSQL + Auth + Realtime)
 - **UI 组件库**: [shadcn/ui](https://ui.shadcn.com/) (基于 Radix UI)
 - **样式**: [Tailwind CSS](https://tailwindcss.com/)
@@ -60,6 +60,12 @@
 - **实时同步**: 多端数据实时更新。
 - **响应式设计**: 完美适配桌面端与移动端，针对移动端优化了导航和工具栏布局，支持明暗主题切换。
 
+## 🐳 Docker / NAS 部署
+
+可直接使用 `onehacker/pure-genealogy` 镜像，支持 amd64 与 arm64。已有 Supabase 可只运行应用；没有 Supabase 时，可通过 Compose 一起启动数据库、Auth、REST 与 API 网关。
+
+完整命令、首次账号、HTTPS、SMTP、备份恢复与多架构发布见 **[Docker 部署文档](docs/docker-deployment.md)**。精简自托管栈不包含 Studio、Storage 或 Realtime；所有登录用户共同管理一份族谱。
+
 ## 📦 快速开始
 
 ### 1. 克隆项目
@@ -86,30 +92,9 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=你的_Supabase_Anon_Key
 
 ### 4. 初始化数据库
 
-在 Supabase 项目的 SQL Editor 中执行以下脚本以创建核心表：
+在 Supabase 项目的 SQL Editor 中执行 [数据库初始化 SQL](docker/self-hosted/family-members.sql)，创建成员表、索引与 RLS。该脚本用于新安装，仅执行一次；匿名用户无权访问族谱，所有已登录用户可读写。已有数据库先备份并核对结构。
 
-```sql
-CREATE TABLE family_members (
-    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    name text NOT NULL,
-    generation integer,
-    sibling_order integer,
-    father_id bigint REFERENCES family_members(id),
-    gender text CHECK (gender IN ('男', '女')),
-    official_position text,
-    is_alive boolean DEFAULT true,
-    spouse text,
-    remarks text, -- 存储 Slate.js 富文本 JSON 数据
-    birthday date,
-    death_date date,
-    residence_place text,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
-);
-
--- 创建索引优化查询
-CREATE INDEX idx_family_members_father_id ON family_members(father_id);
-CREATE INDEX idx_family_members_name ON family_members(name);
-```
+在 Supabase Authentication 中创建并确认首位用户；详细权限与自托管账号创建方式见 [Docker 部署文档](docs/docker-deployment.md)。
 
 ### 5. 启动开发服务器
 

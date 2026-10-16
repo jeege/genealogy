@@ -1,0 +1,65 @@
+# 只替换 Compose 传入的环境变量；Nginx 自身的 $http_* 等变量由官方 entrypoint 保留。
+map_hash_bucket_size 512;
+map $http_apikey $valid_api_key {
+  default 0;
+  "${ANON_KEY}" 1;
+  "${SERVICE_ROLE_KEY}" 1;
+}
+map $http_authorization $upstream_authorization {
+  default $http_authorization;
+  "" "Bearer ${ANON_KEY}";
+}
+map $http_origin $cors_origin {
+  default "";
+  "${SITE_URL}" $http_origin;
+}
+
+server {
+  listen 8000;
+  server_tokens off;
+  # 验证/找回链接的 query 中含敏感 token，禁止写访问日志。
+  access_log off;
+  client_max_body_size 10m;
+  # 网关统一处理 CORS，避免与 GoTrue 的 CORS 响应头重复。
+  proxy_hide_header Access-Control-Allow-Origin;
+  proxy_hide_header Access-Control-Allow-Credentials;
+  proxy_hide_header Access-Control-Allow-Methods;
+  proxy_hide_header Access-Control-Allow-Headers;
+  proxy_hide_header Access-Control-Expose-Headers;
+
+  add_header Access-Control-Allow-Origin $cors_origin always;
+  add_header Access-Control-Allow-Credentials "true" always;
+  add_header Access-Control-Allow-Methods "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS" always;
+  add_header Access-Control-Allow-Headers "authorization, apikey, content-type, prefer, range, x-client-info, x-supabase-api-version, accept-profile, content-profile" always;
+  add_header Access-Control-Expose-Headers "content-range, range-unit, x-total-count" always;
+  add_header Vary "Origin" always;
+  if ($request_method = OPTIONS) { return 204; }
+
+  location = /health { return 200 'ok'; }
+
+  # 与官方网关保持语义一致：浏览器打开验证/授权链接不携带 apikey。
+  # 此处只开放 Auth 自身的公开端点，Admin API 仍经过下方密钥校验与 Auth 鉴权。
+  location ~ ^/auth/v1/(verify|callback|authorize|\.well-known/(jwks\.json|openid-configuration|oauth-authorization-server))$ {
+    rewrite ^/auth/v1/(.*)$ /$1 break;
+    proxy_pass http://auth:9999;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  }
+  location /auth/v1/ {
+    if ($valid_api_key = 0) { return 401; }
+    proxy_pass http://auth:9999/;
+    proxy_set_header Authorization $upstream_authorization;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  }
+  location /rest/v1/ {
+    if ($valid_api_key = 0) { return 401; }
+    proxy_pass http://rest:3000/;
+    proxy_set_header Authorization $upstream_authorization;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  }
+  location / { return 404; }
+}

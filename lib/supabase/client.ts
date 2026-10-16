@@ -1,8 +1,10 @@
 import { createBrowserClient } from "@supabase/ssr";
+import { getBrowserPublicRuntimeConfig } from "@/components/runtime-config-provider";
+import { getSupabaseCookieName } from "@/lib/runtime-config";
 
 export function createClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-  );
+  const config = getBrowserPublicRuntimeConfig();
+  return createBrowserClient(config.supabaseUrl, config.supabasePublishableKey, {
+    cookieOptions: { name: getSupabaseCookieName(config.supabaseUrl) },
+  });
 }

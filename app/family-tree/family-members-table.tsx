@@ -600,7 +600,7 @@ export function FamilyMembersTable({
               <TableHead className="w-20">在世</TableHead>
               <TableHead>配偶</TableHead>
               <TableHead>生平事迹</TableHead>
-              <TableHead className="w-44">更新时间</TableHead>
+              <TableHead className="w-44">更新时间（北京时间）</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -706,7 +706,9 @@ export function FamilyMembersTable({
                     )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {new Date(member.updated_at).toLocaleString("zh-CN")}
+                    {new Date(member.updated_at).toLocaleString("zh-CN", {
+                      timeZone: "Asia/Shanghai",
+                    })}
                   </TableCell>
                 </TableRow>
               ))
