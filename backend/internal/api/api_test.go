@@ -16,7 +16,9 @@ import (
 	"github.com/yunfengsa/pure-genealogy/backend/internal/auth"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/config"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/domain"
+	"github.com/yunfengsa/pure-genealogy/backend/internal/gedcom"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/mailer"
+	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
 type fakeAuth struct {
@@ -92,6 +94,7 @@ type fakeMembers struct {
 	validate    func(ctx context.Context, memberID, fatherID int64) error
 	resolve     func(ctx context.Context, members []domain.ImportMember) ([]*domain.ImportFatherMatch, error)
 	importBatch func(ctx context.Context, members []domain.ImportMember) (int, error)
+	gedcom      func(ctx context.Context, tree *gedcom.ParsedTree, replace bool) (domain.GEDCOMImportResult, error)
 }
 
 func (f *fakeMembers) ListMembers(ctx context.Context, page, pageSize int, search string) ([]domain.Member, int, error) {
@@ -166,6 +169,13 @@ func (f *fakeMembers) ResolveImportFathers(ctx context.Context, members []domain
 	}
 	return f.resolve(ctx, members)
 }
+func (f *fakeMembers) ImportGEDCOM(ctx context.Context, tree *gedcom.ParsedTree, replace bool) (domain.GEDCOMImportResult, error) {
+	if f.gedcom == nil {
+		return domain.GEDCOMImportResult{Members: len(tree.Members), Families: tree.Families}, nil
+	}
+	return f.gedcom(ctx, tree, replace)
+}
+
 func (f *fakeMembers) ImportMembers(ctx context.Context, members []domain.ImportMember) (int, error) {
 	if f.importBatch == nil {
 		return len(members), nil
@@ -454,5 +464,178 @@ func TestConfigAndStaticPageAuth(t *testing.T) {
 	unknownAPI := perform(t, server, http.MethodGet, "/api/not-found", nil, nil)
 	if unknownAPI.Code != http.StatusNotFound {
 		t.Fatalf("未知 API 应返回 404：%d", unknownAPI.Code)
+	}
+}
+
+const testGEDCOM = `0 HEAD
+1 SOUR pure-genealogy
+1 GEDC
+2 VERS 5.5.1
+1 CHAR UTF-8
+0 @I1@ INDI
+1 NAME 刘/建国/
+1 SEX M
+1 BIRT
+2 DATE 12 MAR 1950
+0 @I2@ INDI
+1 NAME 刘/小明/
+1 SEX M
+1 FAMC @F1@
+0 @F1@ FAM
+1 HUSB @I1@
+1 CHIL @I2@
+0 TRLR
+`
+
+func TestGEDCOMExportResponse(t *testing.T) {
+	fatherID := int64(1)
+	members := &fakeMembers{all: func(context.Context) ([]domain.Member, error) {
+		return []domain.Member{
+			{ID: 1, Name: "刘建国", IsAlive: true, Birthday: stringPtr("1950-03-12")},
+			{ID: 2, Name: "刘小明", IsAlive: true, FatherID: &fatherID},
+		}, nil
+	}}
+	server := testServer(t, authenticatedAuth(), members, fakePinger{})
+	response := perform(t, server, http.MethodGet, "/api/family-members/gedcom", nil, nil, authCookie())
+	if response.Code != http.StatusOK {
+		t.Fatalf("导出失败：%d %s", response.Code, response.Body.String())
+	}
+	body := response.Body.String()
+	if !strings.Contains(body, "0 HEAD") || !strings.Contains(body, "1 NAME 刘建国") {
+		t.Fatalf("导出内容不完整：\n%s", body)
+	}
+	if !strings.Contains(body, "0 @F1@ FAM") || !strings.Contains(body, "1 CHIL @I2@") {
+		t.Fatalf("家庭关系未导出：\n%s", body)
+	}
+	if disposition := response.Header().Get("Content-Disposition"); !strings.Contains(disposition, "attachment") {
+		t.Fatalf("应返回下载响应头：%s", disposition)
+	}
+	if contentType := response.Header().Get("Content-Type"); !strings.Contains(contentType, "gedcom") {
+		t.Fatalf("Content-Type 错误：%s", contentType)
+	}
+
+	empty := testServer(t, authenticatedAuth(), &fakeMembers{}, fakePinger{})
+	emptyResponse := perform(t, empty, http.MethodGet, "/api/family-members/gedcom", nil, nil, authCookie())
+	if emptyResponse.Code != http.StatusBadRequest {
+		t.Fatalf("空族谱应返回 400：%d", emptyResponse.Code)
+	}
+}
+
+func TestGEDCOMPreviewAndImportValidation(t *testing.T) {
+	server := testServer(t, authenticatedAuth(), &fakeMembers{}, fakePinger{})
+
+	preview := perform(t, server, http.MethodPost, "/api/family-members/gedcom/preview",
+		map[string]string{"content": testGEDCOM}, nil, authCookie())
+	if preview.Code != http.StatusOK {
+		t.Fatalf("预览失败：%d %s", preview.Code, preview.Body.String())
+	}
+	var payload struct {
+		Preview domain.GEDCOMImportPreview `json:"preview"`
+	}
+	if err := json.Unmarshal(preview.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Preview.Members != 2 || payload.Preview.Families != 1 || payload.Preview.WithFather != 1 {
+		t.Fatalf("预览统计错误：%+v", payload.Preview)
+	}
+
+	invalid := perform(t, server, http.MethodPost, "/api/family-members/gedcom/preview",
+		map[string]string{"content": "not a gedcom"}, nil, authCookie())
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("非法内容应返回 400：%d %s", invalid.Code, invalid.Body.String())
+	}
+
+	emptyBody := perform(t, server, http.MethodPost, "/api/family-members/gedcom/import",
+		map[string]string{"content": ""}, nil, authCookie())
+	if emptyBody.Code != http.StatusBadRequest {
+		t.Fatalf("空内容应返回 400：%d", emptyBody.Code)
+	}
+}
+
+func TestGEDCOMImportCallsStore(t *testing.T) {
+	var capturedReplace bool
+	imported := 0
+	members := &fakeMembers{gedcom: func(_ context.Context, tree *gedcom.ParsedTree, replace bool) (domain.GEDCOMImportResult, error) {
+		capturedReplace = replace
+		imported = len(tree.Members)
+		return domain.GEDCOMImportResult{Members: len(tree.Members), Families: tree.Families}, nil
+	}}
+	server := testServer(t, authenticatedAuth(), members, fakePinger{})
+	response := perform(t, server, http.MethodPost, "/api/family-members/gedcom/import",
+		map[string]any{"content": testGEDCOM, "replace": true}, nil, authCookie())
+	if response.Code != http.StatusOK {
+		t.Fatalf("导入失败：%d %s", response.Code, response.Body.String())
+	}
+	if !capturedReplace || imported != 2 {
+		t.Fatalf("导入参数错误：replace=%v members=%d", capturedReplace, imported)
+	}
+	if !strings.Contains(response.Body.String(), `"members":2`) {
+		t.Fatalf("导入结果错误：%s", response.Body.String())
+	}
+}
+
+func TestGEDCOMImportRequiresAuth(t *testing.T) {
+	server := testServer(t, &fakeAuth{}, &fakeMembers{}, fakePinger{})
+	for _, endpoint := range []struct{ method, target string }{
+		{http.MethodGet, "/api/family-members/gedcom"},
+		{http.MethodPost, "/api/family-members/gedcom/preview"},
+		{http.MethodPost, "/api/family-members/gedcom/import"},
+	} {
+		method, target := endpoint.method, endpoint.target
+		response := perform(t, server, method, target, map[string]string{"content": testGEDCOM}, nil)
+		if response.Code != http.StatusUnauthorized {
+			t.Fatalf("%s %s 未登录应返回 401：%d", method, target, response.Code)
+		}
+	}
+}
+
+func stringPtr(value string) *string { return &value }
+
+func TestASCIIFilenameFallback(t *testing.T) {
+	cases := map[string]string{
+		"刘家族-20261026.ged": "genealogy-20261026.ged",
+		"genealogy.ged":    "genealogy.ged",
+		"李氏族谱.ged":         "genealogy.ged",
+		"Liu-Family.ged":   "Liu-Family.ged",
+	}
+	for input, want := range cases {
+		if got := asciiFilename(input); got != want {
+			t.Fatalf("asciiFilename(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+func TestGEDCOMRawBodyAndEncoding(t *testing.T) {
+	plain := testServer(t, authenticatedAuth(), &fakeMembers{}, fakePinger{})
+	request := httptest.NewRequest(http.MethodPost, "/api/family-members/gedcom/preview", strings.NewReader(testGEDCOM))
+	request.Header.Set("Content-Type", "text/plain")
+	request.AddCookie(authCookie())
+	recorder := httptest.NewRecorder()
+	plain.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"members":2`) {
+		t.Fatalf("原始 GEDCOM 请求体应可预览：%d %s", recorder.Code, recorder.Body.String())
+	}
+
+	// GB18030 编码的中文文件应被自动识别。
+	gbk, err := simplifiedchinese.GB18030.NewEncoder().Bytes([]byte(testGEDCOM))
+	if err != nil {
+		t.Fatal(err)
+	}
+	gbkRequest := httptest.NewRequest(http.MethodPost, "/api/family-members/gedcom/preview", bytes.NewReader(gbk))
+	gbkRequest.Header.Set("Content-Type", "text/plain")
+	gbkRequest.AddCookie(authCookie())
+	gbkRecorder := httptest.NewRecorder()
+	plain.Handler().ServeHTTP(gbkRecorder, gbkRequest)
+	if gbkRecorder.Code != http.StatusOK || !strings.Contains(gbkRecorder.Body.String(), `"members":2`) {
+		t.Fatalf("GB18030 文件应可预览：%d %s", gbkRecorder.Code, gbkRecorder.Body.String())
+	}
+
+	invalid := httptest.NewRequest(http.MethodPost, "/api/family-members/gedcom/preview", strings.NewReader("not gedcom"))
+	invalid.Header.Set("Content-Type", "text/plain")
+	invalid.AddCookie(authCookie())
+	invalidRecorder := httptest.NewRecorder()
+	plain.Handler().ServeHTTP(invalidRecorder, invalid)
+	if invalidRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("非法原始内容应返回 400：%d", invalidRecorder.Code)
 	}
 }

@@ -2,6 +2,8 @@ import { apiRequest } from "./client";
 import type {
   BiographyMember,
   FamilyMember,
+  GEDCOMImportPreview,
+  GEDCOMImportResult,
   ImportFatherMatch,
   ImportMemberInput,
   MemberInput,
@@ -190,5 +192,85 @@ export async function batchCreateFamilyMembers(
     return { success: true, count: payload.count ?? 0, error: null };
   } catch (error) {
     return { success: false, count: 0, error: message(error) };
+  }
+}
+
+/** 下载 GEDCOM 文件；返回错误信息而不是抛异常，便于页面展示。 */
+export async function exportGEDCOM(): Promise<{ error: string | null }> {
+  try {
+    const response = await fetch("/api/family-members/gedcom", {
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      let message = `导出失败（HTTP ${response.status}）`;
+      const contentType = response.headers.get("content-type") ?? "";
+      if (contentType.includes("application/json")) {
+        const payload = await response.json().catch(() => null) as { error?: unknown } | null;
+        if (payload && typeof payload.error === "string") message = payload.error;
+      }
+      if (response.status === 401 && typeof window !== "undefined") {
+        window.location.assign("/auth/login/");
+      }
+      return { error: message };
+    }
+
+    const disposition = response.headers.get("content-disposition") ?? "";
+    const filename = decodeFilename(disposition) ?? "genealogy.ged";
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    return { error: null };
+  } catch {
+    return { error: "导出失败，请稍后重试" };
+  }
+}
+
+function decodeFilename(disposition: string): string | null {
+  const utf8 = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8) {
+    try {
+      return decodeURIComponent(utf8[1].trim());
+    } catch {
+      // 回退到 ASCII 文件名。
+    }
+  }
+  const plain = disposition.match(/filename="?([^";]+)"?/i);
+  return plain ? plain[1].trim() : null;
+}
+
+export async function previewGEDCOMImport(content: string): Promise<{
+  preview: GEDCOMImportPreview | null;
+  error: string | null;
+}> {
+  try {
+    const payload = await apiRequest<{ preview: GEDCOMImportPreview }>(
+      "/family-members/gedcom/preview",
+      { method: "POST", body: JSON.stringify({ content }) },
+    );
+    return { preview: payload.preview ?? null, error: null };
+  } catch (error) {
+    return { preview: null, error: message(error) };
+  }
+}
+
+export async function importGEDCOM(
+  content: string,
+  replace = false,
+): Promise<{ result: GEDCOMImportResult | null; error: string | null }> {
+  try {
+    const payload = await apiRequest<{ result: GEDCOMImportResult }>(
+      "/family-members/gedcom/import",
+      { method: "POST", body: JSON.stringify({ content, replace }) },
+    );
+    return { result: payload.result ?? null, error: null };
+  } catch (error) {
+    return { result: null, error: message(error) };
   }
 }

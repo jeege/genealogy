@@ -19,6 +19,7 @@
   - **3D 关系网**: 沉浸式力导向图与自动巡游。
   - **家族统计**: 世代增长、性别、年龄、字辈频率等仪表盘。
   - **历史时间轴**: 直观展示生卒年分布。
+- **GEDCOM 互通**: 支持 GEDCOM 5.5.1 导入导出，可与主流族谱软件交换数据；内置族谱软件常见的 GBK 文件自动识别。
 - **沉浸式体验**: “Living Book” 详情页、Slate.js 富文本生平、逐字书写动效。
 - **部署极简**: 运行镜像只需 PostgreSQL；容器内只有一个 Go 进程。
 
@@ -141,6 +142,29 @@ ALLOW_SIGNUP=true \
 ./pure-genealogy user create --email you@example.com
 ./pure-genealogy healthcheck           # 查看 /api/health
 ```
+
+## 🔄 GEDCOM 导入导出
+
+成员列表工具栏提供「导入 GEDCOM」与「导出 GEDCOM」，可与 Ancestry、Gramps、
+MyHeritage 及国内族谱工具交换数据。
+
+- **导入**：上传 `.ged`/`.txt`，先预览成员数、家庭数、可解析父亲数量、重复姓名与
+  未映射标签；可追加导入，也可勾选「先清空现有族谱」后重建。整份文件在单个事务内写入。
+- **编码**：自动识别 UTF-8 与 GBK/GB18030（国内族谱软件常见导出编码）。
+- **日期**：保留 `ABT 1850`、`BEF 12 MAR 1900` 等原始文本（存 `birth_date_raw`/
+  `death_date_raw`），同时解析出可用的 `YYYY-MM-DD` 供统计与时间轴使用。
+- **关系**：由 `FAM` 的 `HUSB`/`CHIL` 推导父子关系、世代与排行；缺失父亲会给出告警。
+- **导出**：UTF-8 + CRLF 的 GEDCOM 5.5.1，文件名如 `刘家族-20261026.ged`，
+  富文本生平转为纯文本 `NOTE`，并用 `_GENC`/`_SIBO`/`_SPO`/`_ALIV` 扩展标签保证往返保真。
+
+命令行也可以直接上传原始文件：
+
+```bash
+curl -b cookies.txt -H 'Content-Type: text/plain' \
+  --data-binary @family.ged http://127.0.0.1:8080/api/family-members/gedcom/preview
+```
+
+完整标签映射与已知限制见 [后端文档的 GEDCOM 章节](docs/backend.md#gedcom-导入导出)。
 
 ## 🐳 Docker / NAS 部署
 

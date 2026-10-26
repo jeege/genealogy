@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Search, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Plus, Trash2, Search, ChevronLeft, ChevronRight, Loader2, Download } from "lucide-react";
 import type { FamilyMember } from "./actions";
 import {
   createFamilyMember,
@@ -38,7 +38,9 @@ import {
   fetchAllMembersForSelect,
   fetchMemberById,
 } from "./actions";
+import { exportGEDCOM } from "@/lib/api/family";
 import { ImportMembersDialog } from "./import-members-dialog";
+import { GEDCOMImportDialog } from "./gedcom-import-dialog";
 import { FatherCombobox } from "./father-combobox";
 import { RichTextEditor } from "@/components/rich-text/editor";
 import { RichTextViewer } from "@/components/rich-text/viewer";
@@ -67,6 +69,7 @@ export function FamilyMembersTable({
 
   const [selectedIds, setSelectedIds] = React.useState<Set<number>>(new Set());
   const [isDeleting, setIsDeleting] = React.useState(false);
+  const [isExporting, setIsExporting] = React.useState(false);
   const [searchInput, setSearchInput] = React.useState(searchQuery);
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -164,6 +167,16 @@ export function FamilyMembersTable({
       newSet.delete(id);
     }
     setSelectedIds(newSet);
+  };
+
+  const handleExportGEDCOM = async () => {
+    setIsExporting(true);
+    try {
+      const result = await exportGEDCOM();
+      if (result.error) alert(`导出失败：${result.error}`);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -302,7 +315,18 @@ export function FamilyMembersTable({
         {/* 操作按钮 */}
         <div className="flex gap-2 flex-wrap w-full lg:w-auto">
           <ImportMembersDialog onSuccess={() => onRefresh?.()} />
-          
+
+          <GEDCOMImportDialog memberCount={totalCount} onSuccess={() => onRefresh?.()} />
+
+          <Button variant="outline" onClick={handleExportGEDCOM} disabled={isExporting}>
+            {isExporting ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4 mr-2" />
+            )}
+            <span className="hidden sm:inline">导出 GEDCOM</span>
+          </Button>
+
           <Button onClick={handleOpenAddDialog}>
             <Plus className="h-4 w-4 mr-2" />
             新增

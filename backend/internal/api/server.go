@@ -10,6 +10,7 @@ import (
 	"github.com/yunfengsa/pure-genealogy/backend/internal/auth"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/config"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/domain"
+	"github.com/yunfengsa/pure-genealogy/backend/internal/gedcom"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/mailer"
 )
 
@@ -42,6 +43,7 @@ type MemberStore interface {
 	ValidateFather(ctx context.Context, memberID, fatherID int64) error
 	ResolveImportFathers(ctx context.Context, members []domain.ImportMember) ([]*domain.ImportFatherMatch, error)
 	ImportMembers(ctx context.Context, members []domain.ImportMember) (int, error)
+	ImportGEDCOM(ctx context.Context, tree *gedcom.ParsedTree, replace bool) (domain.GEDCOMImportResult, error)
 }
 
 // Pinger 用于健康检查，生产环境由数据库连接池实现。
@@ -118,6 +120,9 @@ func (s *Server) routes() {
 	s.mux.Handle("DELETE /api/family-members", s.requireAuth(http.HandlerFunc(s.handleDeleteMembers)))
 	s.mux.Handle("POST /api/family-members/import/preview", s.requireAuth(http.HandlerFunc(s.handlePreviewImport)))
 	s.mux.Handle("POST /api/family-members/import", s.requireAuth(http.HandlerFunc(s.handleImportMembers)))
+	s.mux.Handle("GET /api/family-members/gedcom", s.requireAuth(http.HandlerFunc(s.handleGEDCOMExport)))
+	s.mux.Handle("POST /api/family-members/gedcom/preview", s.requireAuth(http.HandlerFunc(s.handleGEDCOMPreview)))
+	s.mux.Handle("POST /api/family-members/gedcom/import", s.requireAuth(http.HandlerFunc(s.handleGEDCOMImport)))
 
 	s.mux.Handle("GET /api/statistics", s.requireAuth(http.HandlerFunc(s.handleStatistics)))
 

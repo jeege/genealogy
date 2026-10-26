@@ -167,3 +167,80 @@ test("数据层把后端错误转换为页面可展示的结果", async () => {
   assert.deepEqual(await family.batchCreateFamilyMembers([{ name: "甲" }]), { success: false, count: 0, error: "请求失败" });
   assert.equal(await family.fetchMemberById(1), null);
 });
+
+test("GEDCOM 导出下载使用服务端文件名并处理错误", async () => {
+  const family = loadTypeScript("lib/api/family.ts", {
+    "./client": { apiRequest: async () => ({}) },
+  });
+  const originalFetch = globalThis.fetch;
+  const originalDocument = globalThis.document;
+  const originalURL = globalThis.URL;
+  const clicks = [];
+  try {
+    globalThis.document = {
+      createElement: () => ({ click: () => clicks.push("click"), remove() {} }),
+      body: { appendChild() {} },
+    };
+    const created = [];
+    globalThis.URL = Object.assign(
+      (input) => new originalURL(input),
+      { createObjectURL: (blob) => { created.push(blob); return "blob:1"; }, revokeObjectURL() {} },
+    );
+
+    globalThis.fetch = async () => new Response("0 HEAD\n0 TRLR\n", {
+      status: 200,
+      headers: {
+        "content-type": "text/vnd.familysearch.gedcom; charset=utf-8",
+        "content-disposition": `attachment; filename="genealogy.ged"; filename*=UTF-8''${encodeURIComponent("刘家族-20261026.ged")}`,
+      },
+    });
+    const result = await family.exportGEDCOM();
+    assert.equal(result.error, null);
+    assert.equal(clicks.length, 1);
+    assert.equal(created.length, 1);
+
+    globalThis.fetch = async () => jsonResponse({ error: "族谱为空，没有可导出的成员" }, 400);
+    assert.deepEqual(await family.exportGEDCOM(), { error: "族谱为空，没有可导出的成员" });
+
+    globalThis.fetch = async () => { throw new Error("offline"); };
+    assert.match((await family.exportGEDCOM()).error, /导出失败/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.URL = originalURL;
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+});
+
+test("GEDCOM 预览与导入映射后端响应与错误", async () => {
+  const calls = [];
+  const family = loadTypeScript("lib/api/family.ts", {
+    "./client": {
+      apiRequest: async (path, init = {}) => {
+        calls.push({ path, init });
+        if (path.endsWith("/preview")) {
+          return { preview: { members: 2, families: 1, encoding: "UTF-8", version: "5.5.1", warnings: [] } };
+        }
+        if (path.endsWith("/import")) {
+          return { result: { members: 2, families: 1, warnings: ["提示"] } };
+        }
+        return {};
+      },
+    },
+  });
+
+  const preview = await family.previewGEDCOMImport("0 HEAD");
+  assert.equal(preview.error, null);
+  assert.equal(preview.preview.members, 2);
+  assert.deepEqual(JSON.parse(calls[0].init.body), { content: "0 HEAD" });
+
+  const imported = await family.importGEDCOM("0 HEAD", true);
+  assert.equal(imported.result.members, 2);
+  assert.deepEqual(JSON.parse(calls[1].init.body), { content: "0 HEAD", replace: true });
+
+  const failing = loadTypeScript("lib/api/family.ts", {
+    "./client": { apiRequest: async () => { throw new Error("解析失败"); } },
+  });
+  assert.deepEqual(await failing.previewGEDCOMImport("x"), { preview: null, error: "解析失败" });
+  assert.deepEqual(await failing.importGEDCOM("x"), { result: null, error: "解析失败" });
+});

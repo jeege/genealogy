@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/domain"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/family"
+	"github.com/yunfengsa/pure-genealogy/backend/internal/gedcom"
 )
 
 func (s *Store) ResolveImportFathers(ctx context.Context, members []domain.ImportMember) ([]*domain.ImportFatherMatch, error) {
@@ -203,4 +204,25 @@ func generationValue(generation *int) int {
 		return -1
 	}
 	return *generation
+}
+
+// ImportGEDCOM 在一个事务内写入 GEDCOM 成员；replace 为 true 时先清空族谱。
+func (s *Store) ImportGEDCOM(ctx context.Context, tree *gedcom.ParsedTree, replace bool) (domain.GEDCOMImportResult, error) {
+	if tree == nil || len(tree.Members) == 0 {
+		return domain.GEDCOMImportResult{}, &family.ValidationError{Message: "没有可导入的成员"}
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return domain.GEDCOMImportResult{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	result, err := gedcom.Import(ctx, tx, tree, gedcom.ImportOptions{Replace: replace})
+	if err != nil {
+		return domain.GEDCOMImportResult{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return domain.GEDCOMImportResult{}, err
+	}
+	return result, nil
 }

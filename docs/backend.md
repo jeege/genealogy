@@ -100,6 +100,9 @@
 | `DELETE` | `/api/family-members` | 请求体 `{ids:[...]}`，最多 1000 条 |
 | `POST` | `/api/family-members/import/preview` | 请求体 `{members:[...]}`，校验并返回父亲匹配 |
 | `POST` | `/api/family-members/import` | 请求体 `{members:[...]}`，事务内批量导入 |
+| `GET` | `/api/family-members/gedcom` | 导出 GEDCOM 5.5.1 文件（`attachment`） |
+| `POST` | `/api/family-members/gedcom/preview` | 预览 GEDCOM 规模、告警与未映射标签 |
+| `POST` | `/api/family-members/gedcom/import` | 事务内导入 GEDCOM，可 `replace` |
 | `GET` | `/api/statistics` | 统计仪表盘数据 |
 
 成员可空字段使用 `null`；日期格式为 `YYYY-MM-DD`。
@@ -113,6 +116,61 @@
 - 按世代从父到子写入；每批 200 条；整个过程在单个数据库事务中完成，失败自动回滚。
 - 空 Slate 文档（如 `[{"children":[{"text":"  "}]}]`）不计为生平内容。
 
+## GEDCOM 导入导出
+
+支持 GEDCOM 5.5.1 子集，可与主流族谱软件（Ancestry、Gramps、MyHeritage、
+国内族谱工具）交换数据。
+
+### 支持的标签
+
+| 内容 | 标签 |
+| --- | --- |
+| 个人记录 | `INDI`、`NAME`（`GIVN`/`SURN`） |
+| 性别 | `SEX`（M/F） |
+| 生卒 | `BIRT`/`DEAT` 的 `DATE`、`PLAC` |
+| 世系关系 | `FAM` 的 `HUSB`/`WIFE`/`CHIL`、`FAMC` |
+| 其他档案 | `OCCU`（官职）、`RESI`（居住地）、`NOTE`（生平） |
+| 本系统扩展 | `_GENC`（世代）、`_SIBO`（排行）、`_SPO`（配偶文本）、`_ALIV`（在世） |
+
+### 导入行为
+
+- 世代由父亲链推导；无法确定时留空，导入后按根节点深度补全。
+- 排行取同一 `FAM` 内 `CHIL` 的顺序。
+- 父亲不在文件中时按无父成员写入，并在预览中给出告警。
+- `NOTE` 支持共享备注指针（`@N1@`）。
+- 日期原始文本（如 `ABT 1850`、`BEF 12 MAR 1900`）保存在 `birth_date_raw` /
+  `death_date_raw`，可精确导回；同时尽力解析出 `YYYY-MM-DD` 供统计与时间轴使用。
+- 姓名支持标准 `名 /姓/` 与国内常见的 `姓/名/` 两种写法。
+- 编码：JSON 请求体按 UTF-8；直接上传原始内容时后端自动识别 UTF-8 与 GB18030（GBK）。
+- 整份文件在单个事务中写入；`replace: true` 会先清空族谱，失败则整体回滚。
+
+### 导出行为
+
+- 每个有子女的成员生成一个 `FAM` 记录；父亲不在导出集合内的成员不写 `FAMC`，
+  避免产生悬空指针。
+- 富文本生平（Slate JSON）导出为纯文本 `NOTE`，每段一行。
+- 行尾使用 CRLF，编码 UTF-8。
+- 文件名形如 `刘家族-20261026.ged`；`Content-Disposition` 同时提供 ASCII 回退名。
+
+### 命令行
+
+```bash
+# 导出（需要先登录取得会话 Cookie）
+curl -b cookies.txt -o family.ged http://127.0.0.1:8080/api/family-members/gedcom
+
+# 预览与导入原始文件（自动识别编码）
+curl -b cookies.txt -H 'Content-Type: text/plain' \
+  --data-binary @family.ged http://127.0.0.1:8080/api/family-members/gedcom/preview
+curl -b cookies.txt -H 'Content-Type: text/plain' \
+  --data-binary @family.ged http://127.0.0.1:8080/api/family-members/gedcom/import
+```
+
+### 已知限制
+
+- 不支持多个配偶建模：`WIFE` 仅用于推导父子关系，配偶仍以文本字段存储。
+- 忽略 `SOUR`、`OBJE`（多媒体）、`ADDR` 结构化地址、LDS 与自定义事件。
+- 不支持事件级来源与引文。
+
 ## 数据库
 
 迁移文件位于 `backend/internal/database/migrations/`，编译进二进制，启动时自动执行：
@@ -120,7 +178,8 @@
 - `users`：邮箱（小写唯一）、bcrypt 散列；
 - `sessions`：会话令牌散列、过期时间；
 - `password_reset_tokens`：一次性令牌散列与使用时间；
-- `family_members`：与旧 Supabase 结构兼容；
+- `family_members`：与旧 Supabase 结构兼容，新增 `birth_date_raw`/`death_date_raw`
+  保存 GEDCOM 原始日期文本；
 - `schema_migrations`：已执行版本。
 
 `family_members` 使用 `father_id` 自引用外键（默认 `NO ACTION`）。删除仍有子女的成员会返回

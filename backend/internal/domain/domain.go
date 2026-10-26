@@ -38,6 +38,8 @@ type Member struct {
 	Remarks          *string   `json:"remarks"`
 	Birthday         *string   `json:"birthday"`
 	DeathDate        *string   `json:"death_date"`
+	BirthDateRaw     *string   `json:"birth_date_raw"`
+	DeathDateRaw     *string   `json:"death_date_raw"`
 	ResidencePlace   *string   `json:"residence_place"`
 	UpdatedAt        time.Time `json:"updated_at"`
 }
@@ -55,6 +57,8 @@ type MemberInput struct {
 	Remarks          *string
 	Birthday         *string
 	DeathDate        *string
+	BirthDateRaw     *string
+	DeathDateRaw     *string
 	ResidencePlace   *string
 }
 
@@ -140,4 +144,61 @@ type NamedCount struct {
 type NameCount struct {
 	Name  string `json:"name"`
 	Count int    `json:"count"`
+}
+
+// GEDCOMDate 是 GEDCOM 日期字段：保留原始表达式，同时给出可存库的近似 ISO 日期。
+// Raw 为空表示没有该事件；ISO 为空表示只知道年份或无法转换为具体日期。
+type GEDCOMDate struct {
+	Raw  string  `json:"raw"`
+	ISO  *string `json:"iso"`
+	Year *int    `json:"year"`
+}
+
+// GEDCOMMember 是解析后尚未写入数据库的成员，Xref 用于在同一文件内解析关系。
+type GEDCOMMember struct {
+	Xref             string     `json:"xref"`
+	Name             string     `json:"name"`
+	Surname          string     `json:"surname"`
+	GivenNames       string     `json:"given_names"`
+	Gender           *string    `json:"gender"`
+	Generation       *int       `json:"generation"`
+	SiblingOrder     *int       `json:"sibling_order"`
+	Spouse           *string    `json:"spouse"`
+	Remarks          *string    `json:"remarks"`
+	ResidencePlace   *string    `json:"residence_place"`
+	OfficialPosition *string    `json:"official_position"`
+	IsAlive          *bool      `json:"is_alive"`
+	Birth            GEDCOMDate `json:"birth"`
+	Death            GEDCOMDate `json:"death"`
+	FatherXref       *string    `json:"father_xref"`
+	FamilyAsChild    *string    `json:"family_as_child"`
+}
+
+// GEDCOMImportPreview 是导入前的统计与问题清单，不写入数据库。
+type GEDCOMImportPreview struct {
+	Encoding        string   `json:"encoding"`
+	Version         string   `json:"version"`
+	Members         int      `json:"members"`
+	Families        int      `json:"families"`
+	WithFather      int      `json:"with_father"`
+	WithBirthDate   int      `json:"with_birth_date"`
+	MissingName     int      `json:"missing_name"`
+	DuplicateNames  int      `json:"duplicate_names"`
+	IgnoredRecords  int      `json:"ignored_records"`
+	UnsupportedTags []string `json:"unsupported_tags"`
+	Warnings        []string `json:"warnings"`
+}
+
+// GEDCOMImportRequest 是导入接口的请求体。
+type GEDCOMImportRequest struct {
+	Content string `json:"content"`
+	// Replace 为 true 时先清空并重建族谱；默认只追加。
+	Replace bool `json:"replace"`
+}
+
+// GEDCOMImportResult 是导入结果。
+type GEDCOMImportResult struct {
+	Members  int      `json:"members"`
+	Families int      `json:"families"`
+	Warnings []string `json:"warnings"`
 }

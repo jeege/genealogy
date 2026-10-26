@@ -118,3 +118,23 @@ export interface StatisticsData {
   ageStats: NamedCount[];
   commonNames: NameCount[];
 }
+
+export interface GEDCOMImportPreview {
+  encoding: string;
+  version: string;
+  members: number;
+  families: number;
+  with_father: number;
+  with_birth_date: number;
+  missing_name: number;
+  duplicate_names: number;
+  ignored_records: number;
+  unsupported_tags: string[];
+  warnings: string[];
+}
+
+export interface GEDCOMImportResult {
+  members: number;
+  families: number;
+  warnings: string[];
+}

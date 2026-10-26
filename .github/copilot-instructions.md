@@ -83,6 +83,14 @@ residence_place, updated_at
 ### 认证表
 `users`、`sessions`、`password_reset_tokens`、`schema_migrations`。
 
+### GEDCOM
+
+- 实现位于 `backend/internal/gedcom/`（解析、日期、导入映射、导出）。
+- API：`GET /api/family-members/gedcom`、`POST .../gedcom/preview`、`POST .../gedcom/import`。
+- 前端：`app/family-tree/gedcom-import-dialog.tsx`、`lib/api/family.ts` 的
+  `exportGEDCOM` / `previewGEDCOMImport` / `importGEDCOM`。
+- 原始日期文本存 `birth_date_raw` / `death_date_raw`；不要把它们当 ISO 日期处理。
+
 ## 组件规范
 
 ### 路径别名

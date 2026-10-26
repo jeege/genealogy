@@ -128,6 +128,14 @@ useEffect(() => { /* 重新拉取 */ }, [page, search, version]);
     - **年龄分布**: 柱状图展示在世成员的年龄段分布（基于生日数据）。
     - **字辈趋势**: 自动统计姓名中第二个字（通常为字辈）的出现频率。
 
+### GEDCOM 导入导出 (`backend/internal/gedcom/`)
+- 解析 GEDCOM 5.5.1 子集：`INDI`、`FAM`、`NAME`/`SEX`/`BIRT`/`DEAT`/`NOTE`/`OCCU`/`RESI`，
+  扩展标签 `_GENC`/`_SIBO`/`_SPO`/`_ALIV`。
+- 导入时由父亲链推导世代，同一 `FAM` 内 `CHIL` 顺序作为排行。
+- 日期原始文本保留在 `birth_date_raw`/`death_date_raw`，同时解析 ISO 日期。
+- 自动识别 UTF-8 与 GB18030；API 见 `GET /api/family-members/gedcom` 等。
+- 前端入口：`app/family-tree/gedcom-import-dialog.tsx` 与列表工具栏「导出 GEDCOM」。
+
 ### 生平册 (`app/family-tree/biography-book/`)
 - 将所有填写生平事迹的族人编制成一本可翻阅的电子书籍。
 - **封面设计**: 深棕色古籍风格 + 纹理装饰 + 书脊效果，显示收录人数。
@@ -175,13 +183,15 @@ useEffect(() => { /* 重新拉取 */ }, [page, search, version]);
 ### family_members 表（族谱核心表）
 ```sql
 id, name, generation, sibling_order, father_id, gender, 
-official_position, is_alive, spouse, remarks, birthday, death_date, residence_place, updated_at
+official_position, is_alive, spouse, remarks, birthday, death_date,
+birth_date_raw, death_date_raw, residence_place, updated_at
 ```
 - `father_id` 自引用实现树形结构
 - `gender` 限制为 '男' 或 '女'
 - `remarks` 存储生平事迹 (Slate JSON string)
 - `birthday` 类型为 `date`
 - `residence_place` 类型为 `text`
+- `birth_date_raw` / `death_date_raw` 保存 GEDCOM 原始日期文本（如 `ABT 1850`）
 
 ## 开发命令
 
