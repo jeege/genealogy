@@ -1,14 +1,18 @@
 {
   "name": "pure-genealogy",
   "version": "0.1.0",
-  "description": "A genealogy web application built with Next.js, Supabase, and Tailwind CSS.",
+  "description": "A genealogy web application built with Next.js, Go, PostgreSQL, and Tailwind CSS.",
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "test": "node --test tests/*.test.mjs",
+    "dev:api": "node scripts/run-backend.mjs serve",
+    "test": "npm run test:web && npm run test:go",
+    "test:web": "node --test tests/*.test.mjs",
+    "test:go": "node scripts/go.mjs test ./...",
     "test:import": "node --test tests/member-import.test.mjs",
-    "build": "next build",
-    "start": "next start"
+    "db:migrate": "node scripts/run-backend.mjs migrate",
+    "build": "next build && node scripts/copy-web.mjs",
+    "build:binary": "npm run build && node scripts/go.mjs build -o ../pure-genealogy ./cmd/server"
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.8",
@@ -21,8 +25,6 @@
     "@radix-ui/react-scroll-area": "^1.2.10",
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-slot": "^1.2.4",
-    "@supabase/ssr": "^0.8.0",
-    "@supabase/supabase-js": "^2.89.0",
     "@types/dagre": "^0.7.53",
     "@types/three": "0.182.0",
     "@vercel/analytics": "^1.6.1",

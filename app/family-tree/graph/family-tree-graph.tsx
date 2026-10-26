@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState, useRef, useEffect, memo, type MouseEvent } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { getSession } from "@/lib/api/client";
 import {
   ReactFlow,
   Controls,
@@ -282,14 +282,15 @@ const FamilyTreeGraphInner = memo(function FamilyTreeGraphInner({ initialData, o
   const [userEmail, setUserEmail] = useState<string>("");
 
   useEffect(() => {
-    const fetchUser = async () => {
-      const supabase = createClient();
-      const { data: { user } = {} } = await supabase.auth.getUser();
-      if (user?.email) {
-        setUserEmail(user.email);
-      }
-    };
-    fetchUser();
+    let cancelled = false;
+    getSession()
+      .then((user) => {
+        if (!cancelled && user?.email) setUserEmail(user.email);
+      })
+      .catch(() => {
+        // 水印邮箱只是展示信息，读取失败不影响族谱图。
+      });
+    return () => { cancelled = true; };
   }, []);
 
   const [searchQuery, setSearchQuery] = useState("");

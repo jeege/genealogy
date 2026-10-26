@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -13,15 +15,16 @@ export default function Page() {
         <div className="flex flex-col gap-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-2xl">
-                注册成功！
-              </CardTitle>
-              <CardDescription>请检查您的邮箱进行确认</CardDescription>
+              <CardTitle className="text-2xl">注册成功！</CardTitle>
+              <CardDescription>账号已创建</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                您已成功注册。请在登录前检查您的邮箱并确认您的账户。
+                您已成功注册，可以直接使用邮箱和密码登录。
               </p>
+              <Button asChild className="w-full">
+                <Link href="/auth/login">前往登录</Link>
+              </Button>
             </CardContent>
           </Card>
         </div>

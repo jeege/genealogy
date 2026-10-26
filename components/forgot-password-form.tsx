@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
+import { forgotPassword } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -26,19 +26,14 @@ export function ForgotPasswordForm({
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    const supabase = createClient();
     setIsLoading(true);
     setError(null);
 
     try {
-      // The url which will be included in the email. This URL needs to be configured in your redirect URLs in the Supabase dashboard at https://supabase.com/dashboard/project/_/auth/url-configuration
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/update-password`,
-      });
-      if (error) throw error;
+      await forgotPassword(email);
       setSuccess(true);
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "An error occurred");
+      setError(error instanceof Error ? error.message : "发送失败，请稍后重试");
     } finally {
       setIsLoading(false);
     }
@@ -54,7 +49,8 @@ export function ForgotPasswordForm({
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              如果您使用邮箱和密码注册，您将收到一封密码重置邮件。
+              如果该邮箱已注册，您将收到一封密码重置邮件。未配置邮件服务时，
+              请让管理员在 API 服务日志中获取重置链接。
             </p>
           </CardContent>
         </Card>
@@ -62,9 +58,7 @@ export function ForgotPasswordForm({
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl">重置您的密码</CardTitle>
-            <CardDescription>
-              输入您的邮箱，我们将向您发送重置密码的链接
-            </CardDescription>
+            <CardDescription>输入您的邮箱，我们将向您发送重置密码的链接</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleForgotPassword}>
@@ -87,10 +81,7 @@ export function ForgotPasswordForm({
               </div>
               <div className="mt-4 text-center text-sm">
                 已经有账户了？{" "}
-                <Link
-                  href="/auth/login"
-                  className="underline underline-offset-4"
-                >
+                <Link href="/auth/login" className="underline underline-offset-4">
                   登录
                 </Link>
               </div>

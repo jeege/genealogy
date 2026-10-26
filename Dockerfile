@@ -1,27 +1,26 @@
-FROM node:22-bookworm-slim AS dependencies
+# 前端静态导出，随后嵌入 Go 二进制；最终镜像只包含一个可执行文件。
+FROM node:22-bookworm-slim AS web
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
-
-FROM node:22-bookworm-slim AS builder
-WORKDIR /app
-ENV NEXT_TELEMETRY_DISABLED=1
-COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
-# 与应用共用同一份配置校验实现，启动脚本无需额外依赖或 TypeScript 运行器。
-RUN ./node_modules/.bin/tsc lib/runtime-config.ts --outDir /runtime-config --module commonjs --target ES2020 --skipLibCheck
 
-FROM node:22-bookworm-slim AS runner
-WORKDIR /app
-ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
-RUN groupadd --gid 1001 nodejs && useradd --uid 1001 --gid nodejs --create-home nextjs
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /runtime-config/runtime-config.js ./docker/runtime-config.cjs
-COPY --chown=nextjs:nodejs docker/entrypoint.mjs ./docker/entrypoint.mjs
-USER nextjs
-EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD ["node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
-ENTRYPOINT ["node", "docker/entrypoint.mjs"]
+FROM golang:1.24-bookworm AS build
+WORKDIR /src
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+COPY backend/ ./
+COPY --from=web /app/out ./internal/web/dist
+RUN mkdir -p /out && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/genealogy-server ./cmd/server
+
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates tzdata \
+  && addgroup -S genealogy \
+  && adduser -S -G genealogy genealogy
+COPY --from=build /out/genealogy-server /usr/local/bin/genealogy-server
+USER genealogy
+ENV API_HOST=0.0.0.0 API_PORT=8080
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD ["genealogy-server", "healthcheck"]
+ENTRYPOINT ["genealogy-server", "serve"]

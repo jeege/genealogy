@@ -1,15 +1,26 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { Button } from "./ui/button";
-import { createClient } from "@/lib/supabase/server";
+import { getSession } from "@/lib/api/client";
+import type { AuthUser } from "@/lib/api/types";
 import { LogoutButton } from "./logout-button";
 
-export async function AuthButton() {
-  const supabase = await createClient();
+export function AuthButton() {
+  const [user, setUser] = useState<AuthUser | null | undefined>(undefined);
 
-  // You can also use getUser() which will be slower.
-  const { data } = await supabase.auth.getClaims();
+  useEffect(() => {
+    let cancelled = false;
+    getSession().then((current) => {
+      if (!cancelled) setUser(current);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
-  const user = data?.claims;
+  if (user === undefined) {
+    return <div className="h-9 w-28 bg-muted animate-pulse rounded-md" />;
+  }
 
   return user ? (
     <div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-4 w-full md:w-auto">

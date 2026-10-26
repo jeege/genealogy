@@ -5,75 +5,60 @@
 </p>
 
 <p align="center">
-  一个基于 Next.js 16 和 Supabase 构建的现代化、全中文家族族谱管理系统。
+  一个基于 Next.js 16、Go 与 PostgreSQL 构建的现代化、全中文家族族谱管理系统。
 </p>
 
 ## ✨ 项目亮点
 
-- **前沿技术栈**: 采用最新的 **Next.js 16** (App Router) 和 **React 19**。
-- **全栈无服务**: 后端使用 **Supabase**，提供高性能数据库、身份认证及实时订阅功能。
-- **深度中文化**: 针对中文语境深度定制，包括 UI 文案、日期格式、元数据及字辈统计。
-- **多维可视化 (v2.0升级)**:
-  - **2D 族谱图**: 全新升级的渲染引擎。支持**世代标尺**指引、**松柏绿瀑布式**代际渐变色、**配偶直显**。提供“金线溯源”与“金扇繁衍”的双向高亮交互，支持高清大图导出。
-  - **3D 关系网**: 沉浸式三维力导向图，新增**自动巡游 (Auto Tour)** 功能，可自动规划路径并在家族成员间漫游。
-  - **家族统计**: 多维度数据仪表盘，包含世代增长趋势、字辈统计等。
-  - **历史时间轴**: 直观展示家族成员的生卒年时间分布。
-- **沉浸式体验**:
-  - **"Living Book" 详情页**: 独创的 3D 翻书/画卷交互，正面展示档案，背面展示生平。
-  - **富文本生平**: 集成 Slate.js 编辑器，支持排版精美的生平传记，阅读模式支持**逐字书写/毛笔扫过**的艺术动效。
+- **单一二进制**: 前端静态导出后通过 `go:embed` 嵌入 Go，构建产物就是一个可执行文件。
+- **自有认证**: 邮箱 + 密码登录，bcrypt 密码散列，数据库只保存随机会话令牌的散列，不依赖 Supabase Auth。
+- **直连 PostgreSQL**: 只需配置 `DATABASE_URL` 连接字符串；启动时自动执行内嵌迁移。
+- **深度中文化**: UI 文案、日期格式、元数据及字辈统计均针对中文语境定制。
+- **多维可视化 (v2.0)**:
+  - **2D 族谱图**: 世代标尺、松柏绿渐变色、配偶直显、“金线溯源”和“金扇繁衍”双向高亮，支持高清导出。
+  - **3D 关系网**: 沉浸式力导向图与自动巡游。
+  - **家族统计**: 世代增长、性别、年龄、字辈频率等仪表盘。
+  - **历史时间轴**: 直观展示生卒年分布。
+- **沉浸式体验**: “Living Book” 详情页、Slate.js 富文本生平、逐字书写动效。
+- **部署极简**: 运行镜像只需 PostgreSQL；容器内只有一个 Go 进程。
 
 ## 🛠️ 技术栈
 
-- **框架**: [Next.js 16](https://nextjs.org/) (App Router, Server Actions)
-- **数据库 & 认证**: [Supabase](https://supabase.com/) (PostgreSQL + Auth + Realtime)
-- **UI 组件库**: [shadcn/ui](https://ui.shadcn.com/) (基于 Radix UI)
-- **样式**: [Tailwind CSS](https://tailwindcss.com/)
-- **可视化**: 
-  - [@xyflow/react](https://reactflow.dev/) (2D Graph)
-  - [react-force-graph-3d](https://github.com/vasturiano/react-force-graph-3d) (3D Graph)
-  - [recharts](https://recharts.org/) (Charts)
-- **富文本**: [Slate.js](https://docs.slatejs.org/) (生平事迹编辑)
-- **工具**: TypeScript, ESLint, Lucide React (图标), html-to-image (图片导出)
+- **前端**: [Next.js 16](https://nextjs.org/)（App Router、静态导出）、React 19、TypeScript
+- **后端**: Go 1.24（标准库 `net/http`、[pgx](https://github.com/jackc/pgx)、`go:embed`）
+- **数据库**: PostgreSQL 17（可连接任意兼容 PostgreSQL 的托管数据库）
+- **认证**: 自建邮箱密码认证 + HttpOnly 服务端会话 Cookie
+- **UI**: shadcn/ui、Tailwind CSS、Lucide React
+- **可视化**: `@xyflow/react`、`react-force-graph-3d`、`recharts`
+- **富文本**: Slate.js
 
-## 🚀 主要功能
+## 🏗️ 架构
 
-### 1. 核心管理 (`/family-tree`)
-- **成员档案**: 记录姓名、字辈、父母、配偶、生卒年、居住地、官职等详细信息。
-- **富文本生平**: 支持加粗、斜体等格式的生平事迹记录。
-- **Living Book 交互**: 详情页采用拟物化设计，PC 端呈现书卷质感，移动端为全屏卡片。
-- **便捷操作**: 支持成员搜索、增删改查、以及 Excel/CSV 数据的批量导入导出。
-
-### 2. 可视化视图
-- **2D 族谱图 (`/family-tree/graph`)**: 
-  - **自动布局**: 基于 Dagre 算法的层级树状图。
-  - **视觉增强**: 左侧自动生成水墨风“世代标尺”，节点根据代数深浅渐变。
-  - **交互体验**: 点击节点触发“金线溯源”（高亮祖先路径）和“金扇繁衍”（高亮子孙路径）。
-  - **图片导出**: 支持一键导出带背景和水印的高清家族树图片。
-- **3D 力导向图 (`/family-tree/graph-3d`)**: 
-  - **星空漫游**: 炫酷的 3D 节点展示。
-  - **自动巡游**: 自动计算任意两名成员间的最短关系路径，并控制相机自动飞行浏览。
-- **统计仪表盘 (`/family-tree/statistics`)**: 家族人口概览、性别/在世比例、世代增长趋势、年龄分布、字辈频率统计。
-- **时间轴 (`/family-tree/timeline`)**: 横向时间轴展示家族历史跨度。
-
-### 3. 系统功能
-- **安全认证**: 完整的注册、登录、密码重置流程 (Supabase Auth)，登录页采用水墨山水风格。
-- **实时同步**: 多端数据实时更新。
-- **响应式设计**: 完美适配桌面端与移动端，针对移动端优化了导航和工具栏布局，支持明暗主题切换。
-
-## 🐳 Docker / NAS 部署
-
-可直接使用 `onehacker/pure-genealogy` 镜像，支持 amd64 与 arm64。已有 Supabase 可只运行应用；没有 Supabase 时，可通过 Compose 一起启动数据库、Auth、REST 与 API 网关。
-
-完整命令、首次账号、HTTPS、SMTP、备份恢复与多架构发布见 **[Docker 部署文档](docs/docker-deployment.md)**。精简自托管栈不包含 Studio、Storage 或 Realtime；所有登录用户共同管理一份族谱。
-
-## 📦 快速开始
-
-### 1. 克隆项目
-
-```bash
-git clone https://github.com/yunfengsa/pure-genealogy.git
-cd pure-genealogy
+```text
+浏览器
+  │ 同源请求
+  ▼
+Go 单一二进制 (默认 :8080)
+  ├─ /_next/static/*、/images/*     ← go:embed 的前端静态资源
+  ├─ /、/family-tree/*              ← 校验会话后再返回 HTML
+  └─ /api/*                         ← 认证、成员、导入、统计
+                                       │
+                                       ▼
+                              PostgreSQL (DATABASE_URL)
 ```
+
+- 前端 `next build` 输出 `out/`，由 `scripts/copy-web.mjs` 复制到
+  `backend/internal/web/dist/`，再通过 `//go:embed` 打进二进制。
+- 浏览器与后端同源，认证 Cookie 直接生效，不需要反向代理或 Next.js 服务端。
+- 数据库连接串、会话散列与管理员口令只存在于 Go 进程。
+
+## 🚀 本地开发
+
+### 1. 环境要求
+
+- Node.js 22+
+- Go 1.24+
+- PostgreSQL 17（或任意可连接的 PostgreSQL 实例）
 
 ### 2. 安装依赖
 
@@ -81,50 +66,163 @@ cd pure-genealogy
 npm install
 ```
 
-### 3. 配置环境变量
+### 3. 准备数据库
 
-复制 `.env.example` (或新建) 为 `.env.local` 并填入 Supabase 项目配置：
+创建数据库和用户，例如：
 
-```env
-NEXT_PUBLIC_SUPABASE_URL=你的_Supabase_项目_URL
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=你的_Supabase_Anon_Key
+```sql
+CREATE USER genealogy WITH PASSWORD 'change-me';
+CREATE DATABASE genealogy OWNER genealogy;
 ```
 
-### 4. 初始化数据库
+Go 启动时会自动创建 `users`、`sessions`、`password_reset_tokens`、
+`family_members` 与 `schema_migrations` 表，无需手工执行 SQL。
 
-在 Supabase 项目的 SQL Editor 中执行 [数据库初始化 SQL](docker/self-hosted/family-members.sql)，创建成员表、索引与 RLS。该脚本用于新安装，仅执行一次；匿名用户无权访问族谱，所有已登录用户可读写。已有数据库先备份并核对结构。
+### 4. 配置环境变量
 
-在 Supabase Authentication 中创建并确认首位用户；详细权限与自托管账号创建方式见 [Docker 部署文档](docs/docker-deployment.md)。
+复制 `.env.example` 为 `.env.local`：
 
-### 5. 启动开发服务器
+```env
+DATABASE_URL=postgres://genealogy:change-me@127.0.0.1:5432/genealogy?sslmode=disable
+API_PORT=8080
+DEV_API_PROXY_TARGET=http://127.0.0.1:8080
+APP_ORIGIN=http://localhost:3000
+PUBLIC_BASE_URL=http://localhost:3000
+FAMILY_SURNAME=刘
+ALLOW_SIGNUP=true
+```
+
+> `DATABASE_URL` 只提供给 Go，不会进入浏览器。生产环境请使用强密码，
+> 托管数据库通常需要 `sslmode=require`。`npm run dev:api` 会自动读取
+> `.env` 与 `.env.local`；直接 `go run` 时请先导出这些变量。
+
+### 5. 启动
 
 ```bash
+# 终端 1：Go API（127.0.0.1:8080）
+npm run dev:api
+
+# 终端 2：Next.js 开发服务器（localhost:3000，/api 自动代理到 Go）
 npm run dev
 ```
 
-访问 [http://localhost:3000](http://localhost:3000) 开始使用。
+首次使用可以：
+
+- 在 `/auth/sign-up` 注册第一个账号（`ALLOW_SIGNUP=true` 时）；或
+- 启动 Go 前设置 `ADMIN_EMAIL` / `ADMIN_PASSWORD`，由后端自动创建初始管理员；或
+- 使用 CLI 创建账号：
+
+```bash
+cd backend
+ADMIN_PASSWORD='your-password' go run ./cmd/server user create --email you@example.com
+```
+
+## 📦 构建单一二进制
+
+```bash
+npm run build          # 静态导出并复制到 backend/internal/web/dist
+npm run build:binary   # 在前者基础上执行 go build，产出 ./pure-genealogy
+```
+
+产物 `./pure-genealogy` 自带页面与 API，直接运行即可：
+
+```bash
+DATABASE_URL='postgres://genealogy:change-me@127.0.0.1:5432/genealogy?sslmode=disable' \
+APP_ORIGIN='http://localhost:8080' \
+FAMILY_SURNAME='刘' \
+ALLOW_SIGNUP=true \
+./pure-genealogy serve
+```
+
+打开 <http://localhost:8080>。CLI 子命令：
+
+```bash
+./pure-genealogy migrate               # 只执行迁移
+./pure-genealogy user create --email you@example.com
+./pure-genealogy healthcheck           # 查看 /api/health
+```
+
+## 🐳 Docker / NAS 部署
+
+### 一键本地栈（推荐）
+
+```bash
+node scripts/setup-self-hosted.mjs \
+  --site-url http://localhost:3000 \
+  --admin-email you@example.com
+```
+
+脚本生成权限为 `0600` 的 `.env.self-hosted`，并打印一次性初始管理员密码。然后：
+
+```bash
+docker compose --env-file .env.self-hosted up -d --build
+```
+
+Compose 启动 PostgreSQL 与应用容器；应用容器内只有一个 Go 进程，宿主机
+`3000` 映射到容器 `8080`。
+
+### 使用已有 PostgreSQL
+
+```bash
+docker run -d --name pure-genealogy -p 3000:8080 \
+  -e DATABASE_URL='postgres://user:pass@db.example.com:5432/genealogy?sslmode=require' \
+  -e APP_ORIGIN='https://genealogy.example.com' \
+  -e PUBLIC_BASE_URL='https://genealogy.example.com' \
+  -e FAMILY_SURNAME='刘' \
+  -e ALLOW_SIGNUP=false \
+  -e ADMIN_EMAIL='you@example.com' \
+  -e ADMIN_PASSWORD='change-me-please' \
+  onehacker/pure-genealogy:latest
+```
+
+HTTPS、SMTP、备份恢复、从 Supabase 迁移等完整说明见
+**[Docker 部署文档](docs/docker-deployment.md)**。
+
+## 🗄️ 从 Supabase 迁移
+
+- `family_members` 表结构与旧版本兼容；迁移使用 `CREATE TABLE IF NOT EXISTS`，不会删除已有族谱数据。
+- Supabase Auth 用户与会话无法直接复用。迁移后需要重新创建账号，或使用 `user create` 命令。
+- 旧 Supabase 的 RLS 策略不再使用；迁移会关闭 `family_members` 的 RLS（需要数据库角色拥有该表）。
+- 建议先备份数据库，验证数据量后再切换 `DATABASE_URL`。
 
 ## 📂 项目结构
 
-```
+```text
 /
-├── app/                  # Next.js App Router 核心目录
-│   ├── auth/             # 认证流程页面
-│   ├── family-tree/      # 族谱主要功能区
-│   │   ├── graph/        # 2D 视图 (React Flow)
-│   │   ├── graph-3d/     # 3D 视图 (Force Graph)
-│   │   ├── statistics/   # 统计仪表盘
-│   │   ├── timeline/     # 时间轴
-│   │   ├── biography-book/ # 传记书模式
-│   │   └── page.tsx      # 成员列表
-│   └── ...
-├── components/           # React 组件
-│   ├── ui/               # shadcn/ui 基础组件
-│   ├── rich-text/        # Slate 富文本编辑器组件
-│   └── ...
-├── lib/                  # 工具函数与 Supabase 客户端配置
-└── hooks/                # 自定义 Hooks
+├── app/                    # Next.js App Router（静态导出）
+│   ├── auth/               # 登录、注册、找回密码
+│   └── family-tree/        # 成员管理、2D/3D 图、统计、时间轴、生平册
+├── backend/                # Go 后端（二进制入口与全部服务）
+│   ├── cmd/server/         # serve / migrate / user / healthcheck
+│   └── internal/
+│       ├── api/            # 路由、中间件、页面鉴权
+│       ├── web/            # go:embed 静态资源与文件服务
+│       ├── auth/ store/ family/ database/ mailer/ config/
+│       └── web/dist/       # 构建时复制进来的静态页面（不提交）
+├── components/             # React 组件
+├── lib/api/                # 浏览器 API 客户端与共享类型
+├── scripts/                # 静态复制、本地启动、配置生成、镜像发布
+└── tests/                  # Node 测试；Go 测试位于 backend/internal
 ```
+
+## 🧪 测试
+
+```bash
+npm test          # Node 测试 + Go 测试
+npm run test:web  # 仅 Node 测试
+npm run test:go   # 仅 Go 测试
+npx tsc --noEmit  # TypeScript 类型检查
+npm run build     # 静态导出并复制到 Go
+```
+
+Go 测试覆盖配置校验、密码与会话、导入解析、统计、HTTP/页面鉴权与静态文件服务。
+Node 测试覆盖 API 客户端、数据层、导入解析、运行时配置与自托管配置生成。
+
+## 📚 文档
+
+- [后端设计与 API](docs/backend.md)
+- [Docker 部署与运维](docs/docker-deployment.md)
+- [Go 后端说明](backend/README.md)
 
 ## 📄 许可证
 

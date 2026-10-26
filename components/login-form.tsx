@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
+import { login } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,7 +14,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export function LoginForm({
@@ -27,24 +26,19 @@ export function LoginForm({
   const [password, setPassword] = useState(prefillPassword);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const supabase = createClient();
     setIsLoading(true);
     setError(null);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (error) throw error;
+      await login(email, password);
       // 登录成功后重定向到族谱关系图页面
-      router.push("/family-tree/graph");
+      // 整页跳转，确保新会话 Cookie 随 HTML 请求发送给 Go 页面鉴权。
+      window.location.assign("/family-tree/graph/");
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "An error occurred");
+      setError(error instanceof Error ? error.message : "登录失败，请稍后重试");
     } finally {
       setIsLoading(false);
     }
@@ -55,9 +49,7 @@ export function LoginForm({
       <Card>
         <CardHeader>
           <CardTitle className="text-2xl">登录</CardTitle>
-          <CardDescription>
-            请输入您的邮箱登录账户
-          </CardDescription>
+          <CardDescription>请输入您的邮箱登录账户</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin}>
@@ -99,10 +91,7 @@ export function LoginForm({
             </div>
             <div className="mt-4 text-center text-sm">
               还没有账户？{" "}
-              <Link
-                href="/auth/sign-up"
-                className="underline underline-offset-4"
-              >
+              <Link href="/auth/sign-up" className="underline underline-offset-4">
                 注册
               </Link>
             </div>

@@ -1,41 +1,28 @@
-import { Suspense } from "react";
-import { fetchAllFamilyMembers } from "./actions";
-import { FamilyTreeGraph } from "./family-tree-graph";
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Box } from "lucide-react";
-
-function GraphSkeleton() {
-  return (
-    <div className="w-full h-[calc(100vh-200px)] min-h-[500px] border rounded-lg bg-muted/20 animate-pulse flex items-center justify-center">
-      <div className="text-muted-foreground">加载族谱关系图...</div>
-    </div>
-  );
-}
-
-async function GraphLoader() {
-  const { data, error } = await fetchAllFamilyMembers();
-
-  if (error) {
-    return (
-      <div className="bg-destructive/10 text-destructive p-4 rounded-lg">
-        <p>加载数据失败: {error}</p>
-      </div>
-    );
-  }
-
-  if (data.length === 0) {
-    return (
-      <div className="bg-muted/50 text-muted-foreground p-8 rounded-lg text-center">
-        <p>暂无族谱数据，请先添加成员。</p>
-      </div>
-    );
-  }
-
-  return <FamilyTreeGraph initialData={data} />;
-}
+import { fetchAllFamilyMembers, type FamilyMemberNode } from "./actions";
+import { FamilyTreeGraph } from "./family-tree-graph";
 
 export default function FamilyTreeGraphPage() {
+  const [members, setMembers] = useState<FamilyMemberNode[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAllFamilyMembers().then((result) => {
+      if (cancelled) return;
+      setMembers(result.data);
+      setError(result.error);
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 mb-6">
@@ -48,9 +35,21 @@ export default function FamilyTreeGraphPage() {
         </Button>
       </div>
 
-      <Suspense fallback={<GraphSkeleton />}>
-        <GraphLoader />
-      </Suspense>
+      {loading ? (
+        <div className="w-full h-[calc(100vh-200px)] min-h-[500px] border rounded-lg bg-muted/20 animate-pulse flex items-center justify-center">
+          <div className="text-muted-foreground">加载族谱关系图...</div>
+        </div>
+      ) : error ? (
+        <div className="bg-destructive/10 text-destructive p-4 rounded-lg">
+          <p>加载数据失败: {error}</p>
+        </div>
+      ) : members.length === 0 ? (
+        <div className="bg-muted/50 text-muted-foreground p-8 rounded-lg text-center">
+          <p>暂无族谱数据，请先添加成员。</p>
+        </div>
+      ) : (
+        <FamilyTreeGraph initialData={members} />
+      )}
     </div>
   );
 }

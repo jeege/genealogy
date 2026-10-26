@@ -1,3 +1,5 @@
+> **历史文档**：本方案描述的是已被替换的 Supabase 后端。当前实现为 Go + PostgreSQL，见 [`docs/backend.md`](../../backend.md)。
+
 # Docker 与 Supabase 自托管部署设计
 
 ## 目标与范围

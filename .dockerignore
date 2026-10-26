@@ -21,3 +21,7 @@ docs
 .idea
 backups
 data
+.cache
+.npm-cache
+backend/internal/web/dist
+pure-genealogy

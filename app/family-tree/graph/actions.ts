@@ -1,38 +1,7 @@
-"use server";
-
-import { fetchAllRows } from "@/lib/supabase/fetch-all-rows";
-import { createClient } from "@/lib/supabase/server";
-
-export interface FamilyMemberNode {
-  id: number;
-  name: string;
-  generation: number | null;
-  sibling_order: number | null;
-  father_id: number | null;
-  gender: "男" | "女" | null;
-  official_position: string | null;
-  is_alive: boolean;
-  spouse: string | null;
-  remarks: string | null;
-  birthday: string | null;
-  death_date: string | null;
-  residence_place: string | null;
-}
+export type { FamilyMemberNode } from "@/lib/api/family";
+export { fetchAllFamilyMembers } from "@/lib/api/family";
 
 export interface FetchGraphResult {
-  data: FamilyMemberNode[];
+  data: import("@/lib/api/family").FamilyMemberNode[];
   error: string | null;
-}
-
-export async function fetchAllFamilyMembers(): Promise<FetchGraphResult> {
-  const supabase = await createClient();
-
-  return fetchAllRows<FamilyMemberNode>((from, to) =>
-    supabase.from("family_members")
-      .select("id, name, generation, sibling_order, father_id, gender, official_position, is_alive, spouse, remarks, birthday, death_date, residence_place", { count: "exact" })
-      .order("generation", { ascending: true })
-      .order("sibling_order", { ascending: true })
-      .order("id", { ascending: true })
-      .range(from, to)
-  );
 }

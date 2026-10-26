@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
+import { signup } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,7 +13,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export function SignUpForm({
@@ -25,11 +24,9 @@ export function SignUpForm({
   const [repeatPassword, setRepeatPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    const supabase = createClient();
     setIsLoading(true);
     setError(null);
 
@@ -40,17 +37,11 @@ export function SignUpForm({
     }
 
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-        },
-      });
-      if (error) throw error;
-      router.push("/auth/sign-up-success");
+      // 自建认证没有邮件确认环节，注册成功即创建服务端会话。
+      await signup(email, password);
+      window.location.assign("/family-tree/graph/");
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "An error occurred");
+      setError(error instanceof Error ? error.message : "注册失败，请稍后重试");
     } finally {
       setIsLoading(false);
     }
@@ -85,9 +76,11 @@ export function SignUpForm({
                   id="password"
                   type="password"
                   required
+                  minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
+                <p className="text-xs text-muted-foreground">密码至少 8 个字符。</p>
               </div>
               <div className="grid gap-2">
                 <div className="flex items-center">
@@ -97,6 +90,7 @@ export function SignUpForm({
                   id="repeat-password"
                   type="password"
                   required
+                  minLength={8}
                   value={repeatPassword}
                   onChange={(e) => setRepeatPassword(e.target.value)}
                 />

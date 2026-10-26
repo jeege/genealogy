@@ -3,7 +3,7 @@ description: 生成一个基于family_members表的数据,使用react-flow展示
 ---
 
 ## 页面功能
-* 通过Supabase从family_members表中获取数据.
+* 通过 Server Action 调用 Go API 从 family_members 表获取数据.
 * 使用@xyflow/react展示数据节点的关系，呈现家族族谱各个成员的关系图,成员间会有一对多的情况，比如一个父亲有多个子女.
 * 支持节点拖拽和缩放功能，以便更好地查看家族关系.
 * 页面标题为"族谱关系图".
@@ -14,7 +14,7 @@ description: 生成一个基于family_members表的数据,使用react-flow展示
 * 页面路径为/family-tree/graph.
 
 ## 技术要求
-* 使用Supabase的服务端客户端从数据库获取数据.
+* 使用 `lib/api/server.ts` 的 `apiRequest()` 或页面 Server Action 获取数据。
 * 优先使用components/ui下的组件，如果没有首选shadcn/ui的组件.
 * 使用@xyflow/react库实现关系图的展示和交互功能.
 * 确保页面在不同设备和屏幕尺寸下均有良好表现（响应式设计）.

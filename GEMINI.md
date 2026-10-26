@@ -2,13 +2,14 @@
 
 ## 项目概述
 
-这是一个基于 **Next.js 15 (App Router)** + **Supabase** 的家族族谱管理应用，使用 TypeScript 开发。
-项目已进行**全面中文化**（zh-CN），包括 UI 文案、日期格式及元数据。
+这是一个基于 **Next.js 16 (App Router)** + **Go + PostgreSQL** 的家族族谱管理应用，前端使用 TypeScript。
+项目已进行**全面中文化**（zh-CN），包括 UI 文案、日期格式及元数据。Go 后端不再依赖 Supabase。
 
 ## 技术栈
 
-- **框架**: Next.js 15 (App Router, RSC)
-- **后端/数据库**: Supabase (PostgreSQL + Auth + Realtime)
+- **框架**: Next.js 16 (App Router, 静态导出 `output: export`)
+- **后端**: Go 1.24（标准库 HTTP + pgx）
+- **数据库/认证**: PostgreSQL + 自建邮箱密码认证（服务端会话 Cookie）
 - **UI**: shadcn/ui (new-york 风格) + Tailwind CSS
 - **可视化**: 
     - `@xyflow/react` (React Flow) 用于 2D 族谱图
@@ -19,49 +20,59 @@
 
 ## 关键架构模式
 
-### Supabase 客户端使用规范
+### 静态前端与 API 使用规范
 
-项目有三种 Supabase 客户端，**必须根据上下文正确选择**：
+前端没有 Server Component 数据获取，也没有 Server Actions / Route Handlers / Middleware。
+所有页面都是 Client Component，直接访问同源 Go API。
 
-| 场景 | 使用文件 | 调用方式 |
-|------|----------|----------|
-| Client Component | `lib/supabase/client.ts` | `createClient()` 同步 |
-| Server Component / Route Handler | `lib/supabase/server.ts` | `await createClient()` 异步 |
-| Middleware | `lib/supabase/proxy.ts` | `updateSession(request)` |
+| 场景 | 使用文件 | 说明 |
+|------|----------|------|
+| 认证请求 | `lib/api/client.ts` | `apiRequest()`，同源 `/api/*`，401 自动跳登录页 |
+| 族谱数据 | `lib/api/family.ts` | 列表、CRUD、导入、统计、时间轴 |
+| 运行时候选 | `GET /api/config` | `RuntimeConfigProvider` 读取 `familySurname` |
+| 页面鉴权 | `backend/internal/api/static.go` | 返回 `/` 与 `/family-tree/*` HTML 前校验会话 |
 
 ```typescript
-// ✅ Server Component 中
-const supabase = await createClient();
-const { data } = await supabase.auth.getClaims();
+"use client";
+import { fetchAllFamilyMembers } from "@/lib/api/family";
 
-// ✅ Client Component 中
-'use client'
-const supabase = createClient();
+const { data, error } = await fetchAllFamilyMembers();
 ```
 
-### 路由保护规则
+- 不要新增 `app/api/**/route.ts`、`middleware.ts` 或 `"use server"` 文件，静态导出不支持。
+- 页面里不要写 `export const dynamic` / `generateMetadata` 等需要服务端的导出。
+- 数据获取放在 `useEffect` 中，并提供加载与错误状态。
 
-通过 `lib/supabase/proxy.ts` 实现认证中间件：
-- 公开路由: `/`, `/noauth/*`, `/auth/*`, `/login/*`
-- 受保护路由: 其他所有路径（未登录自动跳转 `/auth/login`）
+### 页面鉴权规则
+
+由 Go 静态处理器实现，而不是 Next.js：
+- 公开：`/auth/*`、`/api/*`、`/_next/static/*`、`/images/*`、`/api/health`、`/api/config`
+- 受保护：`/` 与 `/family-tree/*` 的 HTML；未登录 302 到 `/auth/login/`
+- `.txt` RSC 骨架与静态资源不含数据，允许匿名加载
+- 会话 Cookie 名称: `genealogy_session`（HttpOnly、SameSite=Lax）
+- 链接统一使用带尾斜杠的静态路径，如 `/auth/login/`、`/family-tree/graph/`
 
 ### 认证流程
 
-- 使用 `supabase.auth.getClaims()` 获取用户信息（比 `getUser()` 更快）
-- 登录成功后跳转到 `/`
-- 认证相关页面位于 `app/auth/` 目录
-- **登录体验优化**: 
+- Go API 使用 bcrypt 散列密码，数据库只保存随机会话令牌的 SHA-256 散列。
+- 登录成功后跳转 `/family-tree/graph/`；注册成功即创建会话。
+- 认证页面位于 `app/auth/`；密码重置通过 SMTP 邮件或 API 日志中的一次性链接完成。
+- **登录体验优化**:
     - 采用水墨山水背景（`login-bg.jpg`）及毛玻璃效果，增强家族文化氛围。
     - 登录按钮集成 `Loader2` 加载动画，提供明确的交互反馈。
 
-### 数据缓存与刷新
+### 数据刷新
 
-为确保族谱数据在不同视图（列表、2D图、3D图、时间轴）之间保持同步，在 `app/family-tree/actions.ts` 中的所有数据变更操作（创建、更新、删除、批量导入）必须触发路径重验证：
+静态站点没有服务端缓存，也没有 `revalidatePath`。写操作成功后调用数据层回调：
 
-```typescript
-// 必须使用 "layout" 类型以失效整个路由段的缓存
-revalidatePath("/family-tree", "layout");
+```tsx
+// 列表页：FamilyMembersLoader 提供 onRefresh，FamilyMembersTable 在增删改/导入后调用
+const [version, setVersion] = useState(0);
+const refresh = () => setVersion((v) => v + 1);
+useEffect(() => { /* 重新拉取 */ }, [page, search, version]);
 ```
+
+其他页面在进入时重新请求，或由用户手动刷新页面。不要引入 SWR/React Query 等新依赖。
 
 ## 核心功能模块
 
@@ -153,6 +164,14 @@ revalidatePath("/family-tree", "layout");
 
 ## 数据库 Schema
 
+迁移位于 `backend/internal/database/migrations/`，启动时自动执行。
+
+### 认证表
+- `users`：邮箱（小写唯一）、bcrypt 密码散列；
+- `sessions`：会话令牌 SHA-256、过期时间；
+- `password_reset_tokens`：一次性重置令牌、使用时间；
+- `schema_migrations`：已执行迁移版本。
+
 ### family_members 表（族谱核心表）
 ```sql
 id, name, generation, sibling_order, father_id, gender, 
@@ -167,8 +186,12 @@ official_position, is_alive, spouse, remarks, birthday, death_date, residence_pl
 ## 开发命令
 
 ```bash
-npm run dev    # 启动开发服务器 (localhost:3000)
-npm run build  # 生产构建
+npm run dev:api    # 启动 Go API (127.0.0.1:8080)
+npm run dev        # 启动 Next.js 开发服务器，/api 代理到 Go
+npm test           # Node + Go 测试
+npm run build      # 静态导出并复制到 backend/internal/web/dist
+npm run build:binary # 再执行 go build，产出 ./pure-genealogy
+npm run db:migrate # 只执行数据库迁移
 ```
 
 ## 组件规范
@@ -177,7 +200,7 @@ npm run build  # 生产构建
 ```typescript
 @/components  → components/
 @/lib         → lib/
-@/hooks       → hooks/
+@/lib/api     → 同源 API 客户端与数据层
 @/components/ui → shadcn 组件
 @/components/rich-text → 富文本编辑器组件
 ```
@@ -187,13 +210,20 @@ npm run build  # 生产构建
 - shadcn 组件位于 `components/ui/`
 - 图标使用 `lucide-react`
 
-### 实时功能
-使用 `hooks/use-realtime-chat.tsx` 作为 Supabase Realtime 的参考实现。
+### 数据刷新
+项目不再使用 Supabase Realtime，也没有服务端数据层。写操作完成后由页面重新请求 Go API。
 
 ## 环境变量
 
-必需配置 `.env.local`:
+本地开发 `.env.local`（Go API 与 Next.js 分进程运行）:
 ```
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+DATABASE_URL=postgres://genealogy:change-me@127.0.0.1:5432/genealogy?sslmode=disable
+API_PORT=8080
+DEV_API_PROXY_TARGET=http://127.0.0.1:8080
+APP_ORIGIN=http://localhost:3000
+PUBLIC_BASE_URL=http://localhost:3000
+FAMILY_SURNAME=刘
+ALLOW_SIGNUP=true
 ```
+
+`DATABASE_URL` 只提供给 Go；浏览器只通过 `/api/config` 拿到姓氏。

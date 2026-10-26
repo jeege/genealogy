@@ -50,6 +50,7 @@ interface FamilyMembersTableProps {
   currentPage: number;
   pageSize: number;
   searchQuery: string;
+  onRefresh?: () => void;
 }
 
 export function FamilyMembersTable({
@@ -58,6 +59,7 @@ export function FamilyMembersTable({
   currentPage,
   pageSize,
   searchQuery,
+  onRefresh,
 }: FamilyMembersTableProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -133,7 +135,7 @@ export function FamilyMembersTable({
           newParams.delete(key);
         }
       });
-      router.push(`/family-tree?${newParams.toString()}`);
+      router.push(`/family-tree/?${newParams.toString()}`);
     });
   };
 
@@ -178,7 +180,7 @@ export function FamilyMembersTable({
 
     if (result.success) {
       setSelectedIds(new Set());
-      router.refresh();
+      onRefresh?.();
     } else {
       alert(`删除失败: ${result.error}`);
     }
@@ -271,7 +273,7 @@ export function FamilyMembersTable({
 
     if (result.success) {
       handleCloseDialog();
-      router.refresh();
+      onRefresh?.();
     } else {
       alert(`${isEditMode ? "更新" : "添加"}失败: ${result.error}`);
     }
@@ -299,7 +301,7 @@ export function FamilyMembersTable({
 
         {/* 操作按钮 */}
         <div className="flex gap-2 flex-wrap w-full lg:w-auto">
-          <ImportMembersDialog onSuccess={() => router.refresh()} />
+          <ImportMembersDialog onSuccess={() => onRefresh?.()} />
           
           <Button onClick={handleOpenAddDialog}>
             <Plus className="h-4 w-4 mr-2" />

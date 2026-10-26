@@ -2,108 +2,86 @@
 
 ## 项目概述
 
-基于 **Next.js 16 (App Router)** + **Supabase** 的家族族谱管理应用，TypeScript 开发。
+基于 **Next.js 16 (App Router, 静态导出)** + **Go 1.24 + PostgreSQL** 的家族族谱管理应用，
+前端使用 TypeScript，后端不再依赖 Supabase。
 
 ## 技术栈
 
-- **框架**: Next.js 16 (App Router, RSC)
-- **后端/数据库**: Supabase (PostgreSQL + Auth + Realtime)
-- **UI**: shadcn/ui (new-york 风格) + Tailwind CSS + lucide-react 图标
-- **可视化**: @xyflow/react 实现族谱关系图
+- **前端**: Next.js 16（`output: "export"`）、React 19、TypeScript
+- **后端**: Go `net/http` + `pgx` + `go:embed`，位于 `backend/`
+- **数据库/认证**: PostgreSQL + 自建邮箱密码认证（HttpOnly 会话 Cookie）
+- **UI**: shadcn/ui (new-york) + Tailwind CSS + lucide-react
+- **可视化**: @xyflow/react、react-force-graph-3d、recharts
 - **主题**: next-themes 明暗模式
 
-## Supabase 客户端规范（必读）
+## 静态前端规范（必读）
 
-**必须根据上下文选择正确的客户端**：
+前端没有 Server Component 数据获取，也没有 Server Actions / Route Handlers / Middleware。
+所有页面都是 Client Component，直接访问同源 Go API。
 
-| 场景 | 文件 | 调用方式 |
-|------|------|----------|
-| Client Component | `lib/supabase/client.ts` | `createClient()` 同步 |
-| Server Component / Server Actions | `lib/supabase/server.ts` | `await createClient()` 异步 |
-| Middleware | `lib/supabase/middleware.ts` | `updateSession(request)` |
+| 场景 | 文件 | 说明 |
+| --- | --- | --- |
+| 认证 | `lib/api/client.ts` | `apiRequest()`，同源 `/api/*`，401 自动跳登录页 |
+| 族谱数据 | `lib/api/family.ts` | 列表、CRUD、导入、统计、时间轴 |
+| 运行时配置 | `GET /api/config` | `RuntimeConfigProvider` 读取 `familySurname` |
+| 页面鉴权 | `backend/internal/api/static.go` | 返回 `/` 与 `/family-tree/*` HTML 前校验会话 |
 
-```typescript
-// ✅ Server Actions 中 (app/family-tree/actions.ts 参考)
-"use server";
-import { createClient } from "@/lib/supabase/server";
-const supabase = await createClient();
+```tsx
+"use client";
+import { fetchAllFamilyMembers } from "@/lib/api/family";
 
-// ✅ Client Component 中
-'use client'
-import { createClient } from "@/lib/supabase/client";
-const supabase = createClient();
+const { data, error } = await fetchAllFamilyMembers();
 ```
+
+禁止事项：
+
+- 新增 `app/api/**/route.ts`、`middleware.ts` 或 `"use server"` 文件；
+- 在页面里使用 `export const dynamic`、`generateMetadata` 等需要服务端的导出；
+- 在浏览器代码中读取 `DATABASE_URL` 或任何服务端密钥；
+- 使用 `next/image` 的优化器（已设为 `unoptimized`）。
 
 ## 页面开发模式
 
-### Server Component + Client Component 分离模式
-参考 `app/family-tree/` 目录结构：
-- `page.tsx` - 页面入口，处理 URL 参数，使用 Suspense 包裹
-- `*-loader.tsx` - Server Component，负责数据获取
-- `*-table.tsx` / `*-graph.tsx` - Client Component (`"use client"`)，负责交互
-- `actions.ts` - Server Actions (`"use server"`)，处理 CRUD
+参考 `app/family-tree/`：
+- `page.tsx` - Client Component，使用 `useSearchParams` 处理 URL 参数
+- `useEffect` 中调用 `lib/api/family.ts` 获取数据
+- 必须有加载中、错误、空数据三种状态
+- 写操作成功后刷新本地数据或列表
 
-```tsx
-// page.tsx 标准模式
-export default function Page({ searchParams }: PageProps) {
-  return (
-    <Suspense fallback={<Skeleton />}>
-      <DataLoader searchParams={searchParams} />
-    </Suspense>
-  );
-}
-```
+### 返回格式
 
-### Server Actions 返回格式
+`lib/api/family.ts` 统一返回：
+
 ```typescript
-// 统一返回格式
-{ success: boolean; error: string | null }
-// 或带数据
 { data: T[]; count: number; error: string | null }
+{ success: boolean; error: string | null }
 ```
 
-### 批量查询关联数据（避免 JOIN）
-```typescript
-const fatherIds = data.map(item => item.father_id).filter(Boolean);
-const { data: fathers } = await supabase
-  .from("family_members")
-  .select("id, name")
-  .in("id", fatherIds);
-const fatherMap = Object.fromEntries(fathers.map(f => [f.id, f.name]));
-```
+## 路由与鉴权
 
-## React Flow 可视化开发
-
-参考 `app/family-tree/graph/` 目录：
-- 自定义节点定义在 `family-node.tsx`，使用 `memo()` 优化
-- 节点数据类型需包含 `[key: string]: unknown` 索引签名
-- CSS 导入使用 `// @ts-expect-error` 注释抑制类型错误
-- 主题适配：使用 CSS 变量 `hsl(var(--foreground))` 等
-
-```tsx
-// 自定义节点数据类型
-export interface FamilyNodeData extends FamilyMemberNode {
-  isHighlighted?: boolean;
-  [key: string]: unknown;  // 必需的索引签名
-}
-```
-
-## 路由与认证
-
-- 公开路由: `/`, `/noauth/*`, `/auth/*`, `/login/*`
-- 受保护路由: 其他所有路径（自动跳转 `/auth/login`）
-- 认证检查使用 `supabase.auth.getClaims()`（比 `getUser()` 更快）
+- 公开：`/auth/*`、`/api/*`、`/_next/static/*`、`/images/*`、`/api/health`、`/api/config`
+- 受保护：`/` 与 `/family-tree/*` 的 HTML，未登录 302 到 `/auth/login/`
+- `.txt` RSC 骨架与静态资源不含数据，允许匿名加载
+- 会话 Cookie：`genealogy_session`（HttpOnly、SameSite=Lax）
+- 站内链接统一带尾斜杠：`/auth/login/`、`/family-tree/graph/`
 
 ## 数据库 Schema
 
+迁移文件位于 `backend/internal/database/migrations/`，启动时自动执行。
+
 ### family_members 表
 ```sql
-id, name, generation, sibling_order, father_id, gender, 
-official_position, is_alive, spouse, remarks, updated_at
+id, name, generation, sibling_order, father_id, gender,
+official_position, is_alive, spouse, remarks, birthday, death_date,
+residence_place, updated_at
 ```
 - `father_id` 自引用实现树形结构
 - `gender` 限制为 '男' 或 '女'
-- 完整 SQL 见 `.github/family_members.sql`
+- `remarks` 存储 Slate JSON 字符串
+- 完整定义以 Go 迁移文件为准
+
+### 认证表
+`users`、`sessions`、`password_reset_tokens`、`schema_migrations`。
 
 ## 组件规范
 
@@ -111,31 +89,45 @@ official_position, is_alive, spouse, remarks, updated_at
 ```typescript
 @/components/ui  → shadcn 组件
 @/lib/utils      → cn() 函数
-@/hooks          → 自定义 hooks
+@/lib/api        → 浏览器 API 客户端与类型
 ```
 
 ### UI 模式
 - 使用 `cn()` 合并 className
-- 弹窗使用 shadcn Dialog 组件
+- 弹窗使用 shadcn Dialog
 - 表格使用 shadcn Table + 手动分页
 - 图标统一使用 lucide-react
 
-## 开发命令
+## 构建与开发命令
 
 ```bash
-npm run dev    # localhost:3000
-npm run build  # 生产构建
-npm run lint   # ESLint 检查
+npm run dev:api      # Go API (127.0.0.1:8080)
+npm run dev          # Next.js 开发服务器，/api 代理到 Go
+npm test             # Node + Go 测试
+npx tsc --noEmit     # 类型检查
+npm run build        # 静态导出并复制到 backend/internal/web/dist
+npm run build:binary # 再执行 go build，产出 ./pure-genealogy
+npm run db:migrate   # 只执行数据库迁移
 ```
 
 ## 环境变量
 
-`.env.local` 必需：
+本地开发 `.env.local`：
 ```
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+DATABASE_URL=postgres://genealogy:change-me@127.0.0.1:5432/genealogy?sslmode=disable
+API_PORT=8080
+DEV_API_PROXY_TARGET=http://127.0.0.1:8080
+APP_ORIGIN=http://localhost:3000
+PUBLIC_BASE_URL=http://localhost:3000
+FAMILY_SURNAME=刘
+ALLOW_SIGNUP=true
 ```
+
+`DATABASE_URL` 只提供给 Go；浏览器只通过 `/api/config` 拿到姓氏。
 
 ## 相关指令文件
 
-- `.github/instructions/react-flow.instructions.md` - React Flow 详细用法
+- `.github/instructions/react-flow.instructions-backup.md` - React Flow 详细用法
+- `.github/instructions/react-force-graph.instructions.md` - 3D 图用法
+- `docs/backend.md` - 后端配置与完整 API
+- `docs/docker-deployment.md` - 部署与运维

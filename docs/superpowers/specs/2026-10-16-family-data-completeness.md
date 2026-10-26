@@ -1,3 +1,5 @@
+> **历史文档**：本方案描述的是已被替换的 Supabase 后端。当前实现为 Go + PostgreSQL，见 [`docs/backend.md`](../../backend.md)。
+
 # 千人以上族谱数据完整性修复设计
 
 ## 问题与目标

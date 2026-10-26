@@ -1,26 +1,41 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import type { PublicRuntimeConfig } from "@/lib/runtime-config";
 
-const RuntimeConfigContext = createContext<PublicRuntimeConfig | null>(null);
+const DEFAULT_CONFIG: PublicRuntimeConfig = { familySurname: "刘" };
+const RuntimeConfigContext = createContext<PublicRuntimeConfig>(DEFAULT_CONFIG);
 
-export function RuntimeConfigProvider({ config, children }: {
-  config: PublicRuntimeConfig;
+export function RuntimeConfigProvider({
+  initialConfig = DEFAULT_CONFIG,
+  children,
+}: {
+  initialConfig?: PublicRuntimeConfig;
   children: React.ReactNode;
 }) {
+  const [config, setConfig] = useState<PublicRuntimeConfig>(initialConfig);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/config", { cache: "no-store", credentials: "same-origin" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data: unknown) => {
+        if (cancelled || !data || typeof data !== "object") return;
+        const surname = (data as { familySurname?: unknown }).familySurname;
+        if (typeof surname !== "string" || !surname.trim()) return;
+        const next = { familySurname: surname.trim() };
+        setConfig(next);
+        document.title = `${next.familySurname}氏族谱管理系统`;
+      })
+      .catch(() => {
+        // 配置接口不可用时保留构建时默认姓氏。
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   return <RuntimeConfigContext.Provider value={config}>{children}</RuntimeConfigContext.Provider>;
 }
 
 export function useRuntimeConfig(): PublicRuntimeConfig {
-  const config = useContext(RuntimeConfigContext);
-  if (!config) throw new Error("缺少 RuntimeConfigProvider");
-  return config;
-}
-
-// 供登录、退出等事件回调同步创建 Supabase 客户端；不把请求配置放进服务端模块全局变量。
-export function getBrowserPublicRuntimeConfig(): PublicRuntimeConfig {
-  const element = document.getElementById("public-runtime-config");
-  if (!element?.textContent) throw new Error("缺少浏览器运行时配置");
-  return JSON.parse(element.textContent) as PublicRuntimeConfig;
+  return useContext(RuntimeConfigContext);
 }
