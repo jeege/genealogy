@@ -15,9 +15,12 @@ func (s *Server) handleError(w http.ResponseWriter, err error, operation string)
 		return
 	}
 	var validation *family.ValidationError
+	var marriageValidation *domain.MarriageValidationError
 	switch {
 	case errors.As(err, &validation):
 		writeError(w, http.StatusBadRequest, validation.Message)
+	case errors.As(err, &marriageValidation):
+		writeError(w, http.StatusBadRequest, marriageValidation.Message)
 	case errors.Is(err, auth.ErrSignupDisabled):
 		writeError(w, http.StatusForbidden, auth.ErrSignupDisabled.Error())
 	case errors.Is(err, domain.ErrEmailTaken):
@@ -38,6 +41,8 @@ func (s *Server) handleError(w http.ResponseWriter, err error, operation string)
 		writeError(w, http.StatusBadRequest, "父亲成员不存在")
 	case errors.Is(err, domain.ErrCycle):
 		writeError(w, http.StatusBadRequest, "父子关系不能形成环")
+	case errors.Is(err, domain.ErrInvalidSpouse):
+		writeError(w, http.StatusBadRequest, "配偶成员不存在")
 	case errors.Is(err, domain.ErrHasChildren):
 		writeError(w, http.StatusConflict, "无法删除：仍有成员以这些成员为父亲")
 	case errors.Is(err, domain.ErrDuplicate):

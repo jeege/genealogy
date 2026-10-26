@@ -251,3 +251,114 @@ func TestExportPreservesDeceasedWithoutDeathDate(t *testing.T) {
 		t.Fatalf("往返后在世状态丢失：%+v", tree.Members[0].IsAlive)
 	}
 }
+
+func TestParseAndExportMarriages(t *testing.T) {
+	content := `0 HEAD
+1 CHAR UTF-8
+0 @I1@ INDI
+1 NAME 刘/守仁/
+1 SEX M
+0 @I2@ INDI
+1 NAME 王/秀英/
+1 SEX F
+0 @I3@ INDI
+1 NAME 刘/建国/
+1 SEX M
+0 @I4@ INDI
+1 NAME 李/淑贞/
+1 SEX F
+0 @F1@ FAM
+1 HUSB @I1@
+1 WIFE @I2@
+1 MARR
+2 DATE 12 MAR 1930
+1 CHIL @I3@
+0 @F2@ FAM
+1 HUSB @I3@
+1 WIFE @I4@
+1 MARR
+2 DATE ABT 1955
+1 DIV
+2 DATE 1980
+0 TRLR
+`
+	tree, err := ParseTree(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tree.Unions) != 2 {
+		t.Fatalf("婚姻数量错误：%d", len(tree.Unions))
+	}
+	first := tree.Unions[0]
+	if first.WifeXref == nil || *first.WifeXref != "@I2@" {
+		t.Fatalf("妻子指针错误：%+v", first)
+	}
+	if first.Married.ISO == nil || *first.Married.ISO != "1930-03-12" {
+		t.Fatalf("结婚日期错误：%+v", first.Married)
+	}
+	second := tree.Unions[1]
+	if second.Status != "divorced" {
+		t.Fatalf("有 DIV 应为离异：%s", second.Status)
+	}
+	// 只写年份时不虚构月份与日期，仅保留年份与原文。
+	if second.Divorced.ISO != nil {
+		t.Fatalf("仅有年份时不应虚构完整日期：%+v", second.Divorced)
+	}
+	if second.Divorced.Year == nil || *second.Divorced.Year != 1980 {
+		t.Fatalf("离异年份错误：%+v", second.Divorced)
+	}
+
+	preview := Preview(tree)
+	if preview.Unions != 2 {
+		t.Fatalf("预览婚姻数错误：%d", preview.Unions)
+	}
+
+	// 导出时应写出 WIFE、MARR 与 DIV
+	members := ToMembers(tree)
+	ids := make(map[string]int64, len(members))
+	for index, member := range tree.Members {
+		ids[member.Xref] = members[index].ID
+	}
+	marriages := []domain.Marriage{
+		{
+			ID: 1, HusbandID: ids["@I1@"], WifeID: ptrID(ids["@I2@"]),
+			Status: domain.MarriageMarried, MarriedOn: first.Married.ISO,
+			MarriedOnRaw: ptrStr(first.Married.Raw),
+		},
+		{
+			ID: 2, HusbandID: ids["@I3@"], WifeID: ptrID(ids["@I4@"]),
+			Status:        domain.MarriageDivorced,
+			MarriedOnRaw:  ptrStr(second.Married.Raw),
+			DivorcedOnRaw: ptrStr(second.Divorced.Raw),
+		},
+	}
+	exported := Export(members, ExportOptions{Marriages: marriages})
+	if !strings.Contains(exported, "1 WIFE @I2@") && !strings.Contains(exported, "1 WIFE @I4@") {
+		t.Fatalf("导出缺少 WIFE：\n%s", exported)
+	}
+	if !strings.Contains(exported, "1 MARR") || !strings.Contains(exported, "2 DATE 12 MAR 1930") {
+		t.Fatalf("导出缺少 MARR 日期：\n%s", exported)
+	}
+	if !strings.Contains(exported, "1 DIV") || !strings.Contains(exported, "2 DATE 1980") {
+		t.Fatalf("导出缺少 DIV：\n%s", exported)
+	}
+
+	// 往返后婚姻仍可解析
+	reparsed, err := ParseTree(exported)
+	if err != nil {
+		t.Fatalf("导出结果无法解析：%v\n%s", err, exported)
+	}
+	if len(reparsed.Unions) < 2 {
+		t.Fatalf("往返后婚姻丢失：%d\n%s", len(reparsed.Unions), exported)
+	}
+	if reparsed.Unions[0].Married.ISO == nil || *reparsed.Unions[0].Married.ISO != "1930-03-12" {
+		t.Fatalf("往返后结婚日期丢失：%+v", reparsed.Unions[0])
+	}
+	// ABT 1955 的原文与年份应原样保留。
+	if reparsed.Unions[1].Married.Raw != "ABT 1955" {
+		t.Fatalf("往返后原始日期文本丢失：%q", reparsed.Unions[1].Married.Raw)
+	}
+}
+
+func ptrID(value int64) *int64    { return &value }
+func ptrStr(value string) *string { return &value }

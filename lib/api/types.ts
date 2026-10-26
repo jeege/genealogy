@@ -21,6 +21,7 @@ export interface FamilyMember {
   birthday: string | null;
   death_date: string | null;
   residence_place: string | null;
+  spouses: SpouseLink[];
   updated_at: string;
 }
 
@@ -67,6 +68,9 @@ export interface MemberInput {
   birthday?: string | null;
   death_date?: string | null;
   residence_place?: string | null;
+  /** 要建立的配偶成员 ID；不传表示不改变现有配偶关系，空数组表示全部解除。 */
+  spouse_ids?: number[];
+  spouse_note?: string | null;
 }
 
 export interface UpdateMemberInput extends MemberInput {
@@ -137,4 +141,38 @@ export interface GEDCOMImportResult {
   members: number;
   families: number;
   warnings: string[];
+}
+
+export type MarriageStatus = "married" | "divorced" | "widowed";
+
+export interface Marriage {
+  id: number;
+  husband_id: number;
+  husband_name: string;
+  wife_id: number | null;
+  wife_name: string | null;
+  status: MarriageStatus;
+  married_on: string | null;
+  divorced_on: string | null;
+  married_on_raw: string | null;
+  divorced_on_raw: string | null;
+  note: string | null;
+  updated_at: string;
+}
+
+/** 列表与关系图使用的配偶摘要。 */
+export interface SpouseLink {
+  marriage_id: number;
+  partner_id: number | null;
+  name: string;
+  status: string;
+}
+
+export interface MarriageInput {
+  husband_id: number;
+  wife_id?: number | null;
+  status?: MarriageStatus;
+  married_on?: string | null;
+  divorced_on?: string | null;
+  note?: string | null;
 }

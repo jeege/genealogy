@@ -22,6 +22,7 @@ func Import(ctx context.Context, tx pgx.Tx, tree *ParsedTree, options ImportOpti
 	result := domain.GEDCOMImportResult{
 		Members:  len(tree.Members),
 		Families: tree.Families,
+		Unions:   len(tree.Unions),
 		Warnings: tree.Warnings,
 	}
 	if len(tree.Members) == 0 {
@@ -76,7 +77,40 @@ func Import(ctx context.Context, tx pgx.Tx, tree *ParsedTree, options ImportOpti
 		ids = append(ids, id)
 	}
 
-	// 世代缺失时按父亲链补全，只影响本次导入的记录。
+	// 写入婚姻记录：UNION 引用的双方都已落库时才建立。
+	unionCount := 0
+	for _, union := range tree.Unions {
+		husbandID, ok := importedIDs[union.HusbandXref]
+		if !ok {
+			continue
+		}
+		var wifeID *int64
+		if union.WifeXref != nil {
+			id, ok := importedIDs[*union.WifeXref]
+			if !ok {
+				continue
+			}
+			wifeID = &id
+		}
+		status := union.Status
+		if status == "" {
+			status = "married"
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO public.marriages
+				(husband_id, wife_id, status, married_on, divorced_on, married_on_raw, divorced_on_raw)
+			VALUES ($1, $2, $3, $4::date, $5::date, $6, $7)
+			ON CONFLICT DO NOTHING`,
+			husbandID, wifeID, status, dateOrNil(union.Married), dateOrNil(union.Divorced),
+			rawOrNil(union.Married), rawOrNil(union.Divorced),
+		); err != nil {
+			return domain.GEDCOMImportResult{}, fmt.Errorf("写入配偶关系失败：%w", err)
+		}
+		unionCount++
+	}
+	result.Unions = unionCount
+
+	// 世代缺失时按父亲链补齐，只影响本次导入的记录。
 	if _, err := tx.Exec(ctx, `
 		WITH RECURSIVE lineage AS (
 			SELECT id, generation, father_id, 1 AS depth

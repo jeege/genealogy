@@ -19,4 +19,13 @@ var (
 	ErrCycle = errors.New("parent cycle")
 	// ErrHasChildren 表示成员仍被其他成员引用为父亲。
 	ErrHasChildren = errors.New("member has children")
+	// ErrInvalidSpouse 表示配偶成员不存在。
+	ErrInvalidSpouse = errors.New("spouse not found")
 )
+
+// MarriageValidationError 表示调用方可修正的配偶关系错误。
+type MarriageValidationError struct {
+	Message string
+}
+
+func (e *MarriageValidationError) Error() string { return e.Message }

@@ -38,6 +38,9 @@ import {
   fetchAllMembersForSelect,
   fetchMemberById,
 } from "./actions";
+import { createMarriage, deleteMarriage, fetchMemberMarriages } from "@/lib/api/family";
+import type { Marriage, MemberOption } from "@/lib/api/types";
+import { SpouseEditor } from "./spouse-editor";
 import { exportGEDCOM } from "@/lib/api/family";
 import { ImportMembersDialog } from "./import-members-dialog";
 import { GEDCOMImportDialog } from "./gedcom-import-dialog";
@@ -79,9 +82,10 @@ export function FamilyMembersTable({
 
   const [editingMember, setEditingMember] = React.useState<FamilyMember | null>(null);
   const [biographyMember, setBiographyMember] = React.useState<FamilyMember | null>(null);
-  const [parentOptions, setParentOptions] = React.useState<
-    { id: number; name: string; generation: number | null }[]
-  >([]);
+  const [parentOptions, setParentOptions] = React.useState<MemberOption[]>([]);
+  const [marriages, setMarriages] = React.useState<Marriage[]>([]);
+  const [marriageError, setMarriageError] = React.useState<string | null>(null);
+  const [draftSpouseIds, setDraftSpouseIds] = React.useState<number[]>([]);
 
   // 新增表单状态
   const [formData, setFormData] = React.useState({
@@ -215,11 +219,16 @@ export function FamilyMembersTable({
       residence_place: "",
     });
     setEditingMember(null);
+    setDraftSpouseIds([]);
+    setMarriageError(null);
   };
 
   // 打开新增弹窗
   const handleOpenAddDialog = () => {
     resetForm();
+    setMarriages([]);
+    setMarriageError(null);
+    setDraftSpouseIds([]);
     setIsDialogOpen(true);
   };
 
@@ -239,6 +248,13 @@ export function FamilyMembersTable({
       birthday: member.birthday ?? "",
       death_date: member.death_date ?? "",
       residence_place: member.residence_place ?? "",
+    });
+    setDraftSpouseIds([]);
+    setMarriageError(null);
+    setMarriages([]);
+    fetchMemberMarriages(member.id).then((result) => {
+      setMarriages(result.data);
+      setMarriageError(result.error);
     });
     setIsDialogOpen(true);
   };
@@ -278,9 +294,12 @@ export function FamilyMembersTable({
       residence_place: formData.residence_place || null,
     };
 
+    // 新增成员时把草稿配偶一起提交；编辑模式由配偶编辑器单独维护，避免误清。
     const result = isEditMode && editingMember
       ? await updateFamilyMember({ ...memberData, id: editingMember.id })
-      : await createFamilyMember(memberData);
+      : await createFamilyMember(
+          draftSpouseIds.length > 0 ? { ...memberData, spouse_ids: draftSpouseIds } : memberData,
+        );
 
     setIsSubmitting(false);
 
@@ -551,13 +570,48 @@ export function FamilyMembersTable({
                   </div>
                 )}
 
-                {/* 配偶 */}
+                {/* 配偶关系 */}
+                <div className="grid grid-cols-4 items-start gap-4">
+                  <Label className="text-right pt-2">配偶</Label>
+                  <div className="col-span-3">
+                    <SpouseEditor
+                      memberId={editingMember?.id ?? null}
+                      gender={(formData.gender as "男" | "女") || null}
+                      options={parentOptions}
+                      isLoadingOptions={isLoadingParents}
+                      marriages={marriages}
+                      draftSpouseIds={draftSpouseIds}
+                      onDraftSpouseIdsChange={setDraftSpouseIds}
+                      error={marriageError}
+                      onCreateMarriage={async (input) => {
+                        const result = await createMarriage(input);
+                        if (result.error) return result.error;
+                        const refreshed = await fetchMemberMarriages(editingMember!.id);
+                        setMarriages(refreshed.data);
+                        setMarriageError(refreshed.error);
+                        return null;
+                      }}
+                      onDeleteMarriage={async (id) => {
+                        const result = await deleteMarriage(id);
+                        if (result.error) return result.error;
+                        setMarriages((current) => current.filter((item) => item.id !== id));
+                        return null;
+                      }}
+                    />
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      配偶需先登记为成员才能关联；旧数据中的配偶文本仍显示在「配偶备注」。
+                    </p>
+                  </div>
+                </div>
+
+                {/* 配偶备注（自由文本，兼容旧数据） */}
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="spouse" className="text-right">
-                    配偶
+                    配偶备注
                   </Label>
                   <Input
                     id="spouse"
+                    placeholder="如：王氏（原配）"
                     value={formData.spouse}
                     onChange={(e) =>
                       setFormData({ ...formData, spouse: e.target.value })
@@ -716,7 +770,7 @@ export function FamilyMembersTable({
                   <TableCell>{member.residence_place ?? "-"}</TableCell>
                   <TableCell>{member.official_position ?? "-"}</TableCell>
                   <TableCell>{member.is_alive ? "是" : "否"}</TableCell>
-                  <TableCell>{member.spouse ?? "-"}</TableCell>
+                  <TableCell>{formatSpouses(member)}</TableCell>
                   <TableCell>
                     {member.remarks ? (
                       <Button 
@@ -783,4 +837,19 @@ export function FamilyMembersTable({
       </Dialog>
     </div>
   );
+}
+
+const MARRIAGE_STATUS_LABELS: Record<string, string> = {
+  married: "",
+  divorced: "（离异）",
+  widowed: "（丧偶）",
+};
+
+/** 列表单元格：结构化配偶优先，缺失时回退到文本备注。 */
+function formatSpouses(member: FamilyMember): string {
+  const linked = (member.spouses ?? []).map(
+    (spouse) => `${spouse.name}${MARRIAGE_STATUS_LABELS[spouse.status] ?? ""}`,
+  );
+  if (linked.length > 0) return linked.join("、");
+  return member.spouse ?? "-";
 }

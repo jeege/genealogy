@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/yunfengsa/pure-genealogy/backend/internal/gedcom"
 )
@@ -30,8 +29,18 @@ func (s *Server) handleGEDCOMExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filename := fmt.Sprintf("%s家族-%s.ged", s.cfg.FamilySurname, time.Now().Format("20060102"))
-	content := gedcom.Export(members, gedcom.ExportOptions{FileName: filename, Now: s.now()})
+	marriages, err := s.members.ListAllMarriages(r.Context())
+	if err != nil {
+		s.handleError(w, err, "导出配偶关系")
+		return
+	}
+
+	filename := fmt.Sprintf("%s家族-%s.ged", s.cfg.FamilySurname, s.now().Format("20060102"))
+	content := gedcom.Export(members, gedcom.ExportOptions{
+		FileName:  filename,
+		Now:       s.now(),
+		Marriages: marriages,
+	})
 
 	w.Header().Set("Content-Type", gedcomContentType)
 	w.Header().Set("Content-Disposition", fmt.Sprintf(

@@ -25,23 +25,25 @@ func (u User) Public() PublicUser {
 
 // Member 是族谱成员。可空字段使用指针，便于前端区分空字符串与未填写。
 type Member struct {
-	ID               int64     `json:"id"`
-	Name             string    `json:"name"`
-	Generation       *int      `json:"generation"`
-	SiblingOrder     *int      `json:"sibling_order"`
-	FatherID         *int64    `json:"father_id"`
-	FatherName       *string   `json:"father_name"`
-	Gender           *string   `json:"gender"`
-	OfficialPosition *string   `json:"official_position"`
-	IsAlive          bool      `json:"is_alive"`
-	Spouse           *string   `json:"spouse"`
-	Remarks          *string   `json:"remarks"`
-	Birthday         *string   `json:"birthday"`
-	DeathDate        *string   `json:"death_date"`
-	BirthDateRaw     *string   `json:"birth_date_raw"`
-	DeathDateRaw     *string   `json:"death_date_raw"`
-	ResidencePlace   *string   `json:"residence_place"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID               int64   `json:"id"`
+	Name             string  `json:"name"`
+	Generation       *int    `json:"generation"`
+	SiblingOrder     *int    `json:"sibling_order"`
+	FatherID         *int64  `json:"father_id"`
+	FatherName       *string `json:"father_name"`
+	Gender           *string `json:"gender"`
+	OfficialPosition *string `json:"official_position"`
+	IsAlive          bool    `json:"is_alive"`
+	Spouse           *string `json:"spouse"`
+	Remarks          *string `json:"remarks"`
+	Birthday         *string `json:"birthday"`
+	DeathDate        *string `json:"death_date"`
+	BirthDateRaw     *string `json:"birth_date_raw"`
+	DeathDateRaw     *string `json:"death_date_raw"`
+	ResidencePlace   *string `json:"residence_place"`
+	// Spouses 是婚姻关系摘要，Spouse 字段是自由文本备注（兼容旧数据）。
+	Spouses   []SpouseLink `json:"spouses"`
+	UpdatedAt time.Time    `json:"updated_at"`
 }
 
 // MemberInput 是新增或更新成员的输入。PUT 语义下 nil 表示清空该字段。
@@ -60,6 +62,10 @@ type MemberInput struct {
 	BirthDateRaw     *string
 	DeathDateRaw     *string
 	ResidencePlace   *string
+	// SpouseIDs 为要建立的配偶成员 ID；提交后同步为该成员的婚姻记录。
+	// nil 表示不改变现有婚姻；空切片表示解除全部配偶关系。
+	SpouseIDs  *[]int64
+	SpouseNote *string
 }
 
 // MemberOption 用于父亲选择下拉框。
@@ -172,6 +178,18 @@ type GEDCOMMember struct {
 	Death            GEDCOMDate `json:"death"`
 	FatherXref       *string    `json:"father_xref"`
 	FamilyAsChild    *string    `json:"family_as_child"`
+	SpouseXrefs      []string   `json:"spouse_xrefs"`
+}
+
+// GEDCOMUnion 是 GEDCOM FAM 记录表达的一段配偶关系。
+type GEDCOMUnion struct {
+	HusbandXref   string     `json:"husband_xref"`
+	WifeXref      *string    `json:"wife_xref"`
+	FamilyXref    string     `json:"family_xref"`
+	Status        string     `json:"status"`
+	Married       GEDCOMDate `json:"married"`
+	Divorced      GEDCOMDate `json:"divorced"`
+	ChildrenXrefs []string   `json:"children_xrefs"`
 }
 
 // GEDCOMImportPreview 是导入前的统计与问题清单，不写入数据库。
@@ -180,6 +198,7 @@ type GEDCOMImportPreview struct {
 	Version         string   `json:"version"`
 	Members         int      `json:"members"`
 	Families        int      `json:"families"`
+	Unions          int      `json:"unions"`
 	WithFather      int      `json:"with_father"`
 	WithBirthDate   int      `json:"with_birth_date"`
 	MissingName     int      `json:"missing_name"`
@@ -200,5 +219,52 @@ type GEDCOMImportRequest struct {
 type GEDCOMImportResult struct {
 	Members  int      `json:"members"`
 	Families int      `json:"families"`
+	Unions   int      `json:"unions"`
 	Warnings []string `json:"warnings"`
+}
+
+// MarriageStatus 是婚姻状态。
+type MarriageStatus string
+
+const (
+	MarriageMarried  MarriageStatus = "married"
+	MarriageDivorced MarriageStatus = "divorced"
+	MarriageWidowed  MarriageStatus = "widowed"
+)
+
+// Marriage 是一段配偶关系。Wife 可为空，用于只知道配偶姓名的历史记录。
+type Marriage struct {
+	ID         int64          `json:"id"`
+	HusbandID  int64          `json:"husband_id"`
+	Husband    string         `json:"husband_name"`
+	WifeID     *int64         `json:"wife_id"`
+	Wife       *string        `json:"wife_name"`
+	Status     MarriageStatus `json:"status"`
+	MarriedOn  *string        `json:"married_on"`
+	DivorcedOn *string        `json:"divorced_on"`
+	// 原始 GEDCOM 日期文本，保证导入导出往返不丢失「ABT/BEF」等精度。
+	MarriedOnRaw  *string   `json:"married_on_raw"`
+	DivorcedOnRaw *string   `json:"divorced_on_raw"`
+	Note          *string   `json:"note"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+// MarriageInput 是新增或更新配偶关系的输入。
+type MarriageInput struct {
+	HusbandID     int64
+	WifeID        *int64
+	Status        MarriageStatus
+	MarriedOn     *string
+	DivorcedOn    *string
+	MarriedOnRaw  *string
+	DivorcedOnRaw *string
+	Note          *string
+}
+
+// SpouseLink 是成员列表/关系图中展示的配偶摘要。
+type SpouseLink struct {
+	MarriageID int64  `json:"marriage_id"`
+	PartnerID  *int64 `json:"partner_id"`
+	Name       string `json:"name"`
+	Status     string `json:"status"`
 }

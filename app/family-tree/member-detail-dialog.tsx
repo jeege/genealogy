@@ -132,7 +132,17 @@ export function MemberDetailDialog({
                       <div className="space-y-1">
                         <span className="text-[10px] sm:text-xs font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider">配偶</span>
                         <div className="p-2 sm:p-3 bg-stone-50 dark:bg-stone-800/50 rounded border border-stone-100 dark:border-stone-700 text-stone-800 dark:text-stone-200 font-medium text-sm sm:text-base">
-                          {member.spouse || "未记录"}
+                          {member.spouses && member.spouses.length > 0
+                            ? member.spouses
+                                .map((spouse) =>
+                                  spouse.status === "divorced"
+                                    ? `${spouse.name}（离异）`
+                                    : spouse.status === "widowed"
+                                      ? `${spouse.name}（丧偶）`
+                                      : spouse.name,
+                                )
+                                .join("、")
+                            : member.spouse || "未记录"}
                         </div>
                       </div>
                     </div>

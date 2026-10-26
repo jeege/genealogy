@@ -65,6 +65,9 @@ func (s *Store) ListMembers(ctx context.Context, page, pageSize int, search stri
 	if err := rows.Err(); err != nil {
 		return nil, 0, err
 	}
+	if err := s.attachSpouses(ctx, members); err != nil {
+		return nil, 0, err
+	}
 	return members, total, nil
 }
 
@@ -84,7 +87,10 @@ func (s *Store) ListAllMembers(ctx context.Context) ([]domain.Member, error) {
 		}
 		members = append(members, member)
 	}
-	return members, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return members, s.attachSpouses(ctx, members)
 }
 
 func (s *Store) ListMemberOptions(ctx context.Context) ([]domain.MemberOption, error) {
@@ -146,7 +152,10 @@ func (s *Store) ListBiographyMembers(ctx context.Context) ([]domain.Member, erro
 		}
 		members = append(members, member)
 	}
-	return members, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return members, s.attachSpouses(ctx, members)
 }
 
 func (s *Store) ListMembersForStatistics(ctx context.Context) ([]domain.StatisticsMember, error) {
@@ -171,7 +180,38 @@ func (s *Store) ListMembersForStatistics(ctx context.Context) ([]domain.Statisti
 }
 
 func (s *Store) GetMember(ctx context.Context, id int64) (domain.Member, error) {
-	return scanMember(s.pool.QueryRow(ctx, `SELECT`+memberColumns+memberFrom+` WHERE m.id = $1`, id))
+	member, err := scanMember(s.pool.QueryRow(ctx, `SELECT`+memberColumns+memberFrom+` WHERE m.id = $1`, id))
+	if err != nil {
+		return domain.Member{}, err
+	}
+	members := []domain.Member{member}
+	if err := s.attachSpouses(ctx, members); err != nil {
+		return domain.Member{}, err
+	}
+	return members[0], nil
+}
+
+// attachSpouses 批量填充配偶摘要，避免逐条查询造成 N+1。
+func (s *Store) attachSpouses(ctx context.Context, members []domain.Member) error {
+	if len(members) == 0 {
+		return nil
+	}
+	ids := make([]int64, 0, len(members))
+	for _, member := range members {
+		ids = append(ids, member.ID)
+	}
+	links, err := s.ListSpouseLinks(ctx, ids)
+	if err != nil {
+		return err
+	}
+	for index := range members {
+		if spouses, ok := links[members[index].ID]; ok {
+			members[index].Spouses = spouses
+		} else {
+			members[index].Spouses = []domain.SpouseLink{}
+		}
+	}
+	return nil
 }
 
 func (s *Store) CreateMember(ctx context.Context, input domain.MemberInput) (domain.Member, error) {

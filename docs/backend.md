@@ -94,7 +94,11 @@
 | `GET` | `/api/family-members/select` | 父亲下拉候选 |
 | `GET` | `/api/family-members/timeline` | 时间轴字段 |
 | `GET` | `/api/family-members/biography` | 有实质生平内容的成员 |
-| `GET` | `/api/family-members/{id}` | 单个成员（含父亲姓名） |
+| `GET` | `/api/family-members/{id}` | 单个成员（含父亲姓名与配偶摘要） |
+| `GET` | `/api/family-members/{id}/marriages` | 某成员的全部婚姻（含状态与日期） |
+| `POST` | `/api/marriages` | 新增配偶关系 |
+| `PUT` | `/api/marriages/{id}` | 更新配偶关系（状态、结婚/离异日期） |
+| `DELETE` | `/api/marriages/{id}` | 解除配偶关系 |
 | `POST` | `/api/family-members` | 新增 |
 | `PUT` | `/api/family-members/{id}` | 更新（全量字段） |
 | `DELETE` | `/api/family-members` | 请求体 `{ids:[...]}`，最多 1000 条 |
@@ -108,6 +112,25 @@
 成员可空字段使用 `null`；日期格式为 `YYYY-MM-DD`。
 更新时 `father_id: null` 表示清空父亲。后端会校验父亲存在、禁止自引用，
 并用递归查询阻止父子关系成环。
+
+### 配偶关系
+
+`family_members.spouse` 文本字段保留为「配偶备注」，用于历史数据与 Excel/CSV 导入；
+结构化配偶关系存放在 `marriages` 表：
+
+| 字段 | 说明 |
+| --- | --- |
+| `husband_id` / `wife_id` | 两位成员的 ID；`wife_id` 可为空，表示只知配偶姓名 |
+| `status` | `married` / `divorced` / `widowed` |
+| `married_on` / `divorced_on` | 日期（`YYYY-MM-DD`） |
+| `married_on_raw` / `divorced_on_raw` | GEDCOM 原始日期文本（如 `ABT 1955`） |
+| `note` | 备注 |
+
+- 一位成员可以有多段婚姻；同一对成员之间最多一段记录（唯一索引）。
+- 成员列表与关系图通过批量查询附带 `spouses` 摘要，不产生 N+1。
+- 新增/更新成员时可传 `spouse_ids`：不传表示不改变现有关系，传空数组表示解除全部配偶。
+- 删除成员会级联删除其婚姻记录（`ON DELETE CASCADE`）。
+- 删除仍被子女引用的成员仍会返回 `409`，需要先处理父子关系。
 
 ### 批量导入
 
@@ -129,6 +152,7 @@
 | 性别 | `SEX`（M/F） |
 | 生卒 | `BIRT`/`DEAT` 的 `DATE`、`PLAC` |
 | 世系关系 | `FAM` 的 `HUSB`/`WIFE`/`CHIL`、`FAMC` |
+| 婚姻 | `MARR`/`DIV` 的 `DATE`，映射为 `marriages` 记录 |
 | 其他档案 | `OCCU`（官职）、`RESI`（居住地）、`NOTE`（生平） |
 | 本系统扩展 | `_GENC`（世代）、`_SIBO`（排行）、`_SPO`（配偶文本）、`_ALIV`（在世） |
 
@@ -167,7 +191,7 @@ curl -b cookies.txt -H 'Content-Type: text/plain' \
 
 ### 已知限制
 
-- 不支持多个配偶建模：`WIFE` 仅用于推导父子关系，配偶仍以文本字段存储。
+- 配偶关系以 `HUSB`/`WIFE` 二元建模，不支持 GEDCOM 中同一家庭的多配偶并列写法。
 - 忽略 `SOUR`、`OBJE`（多媒体）、`ADDR` 结构化地址、LDS 与自定义事件。
 - 不支持事件级来源与引文。
 

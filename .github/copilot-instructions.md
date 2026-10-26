@@ -83,6 +83,15 @@ residence_place, updated_at
 ### 认证表
 `users`、`sessions`、`password_reset_tokens`、`schema_migrations`。
 
+### 配偶关系
+
+- `marriages` 表连接两位成员，支持多段婚姻与 `married`/`divorced`/`widowed` 状态。
+- API：`GET /api/family-members/{id}/marriages`、`POST /api/marriages`、
+  `PUT|DELETE /api/marriages/{id}`。
+- 新增/更新成员可传 `spouse_ids`；**不传表示不改变婚姻**，空数组表示解除全部。
+- 前端：`app/family-tree/spouse-editor.tsx`；成员查询会附带 `spouses` 摘要。
+- `family_members.spouse` 是配偶备注文本，不是结构化配偶。
+
 ### GEDCOM
 
 - 实现位于 `backend/internal/gedcom/`（解析、日期、导入映射、导出）。

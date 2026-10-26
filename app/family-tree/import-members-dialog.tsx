@@ -178,6 +178,7 @@ export function ImportMembersDialog({ onSuccess }: ImportMembersDialogProps) {
           <DialogDescription>
             请先下载模板，填写数据后上传。支持 Excel (.xlsx, .xls) 和 CSV 格式。
             父亲按姓名及上一世代匹配，可填写已有成员或同一文件中的成员。
+            「配偶」列为配偶姓名备注；结构化配偶关系请在导入后于成员编辑中维护。
           </DialogDescription>
         </DialogHeader>
 

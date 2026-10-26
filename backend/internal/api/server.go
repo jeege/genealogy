@@ -44,6 +44,12 @@ type MemberStore interface {
 	ResolveImportFathers(ctx context.Context, members []domain.ImportMember) ([]*domain.ImportFatherMatch, error)
 	ImportMembers(ctx context.Context, members []domain.ImportMember) (int, error)
 	ImportGEDCOM(ctx context.Context, tree *gedcom.ParsedTree, replace bool) (domain.GEDCOMImportResult, error)
+	ListMarriages(ctx context.Context, memberID int64) ([]domain.Marriage, error)
+	ListAllMarriages(ctx context.Context) ([]domain.Marriage, error)
+	CreateMarriage(ctx context.Context, input domain.MarriageInput) (domain.Marriage, error)
+	UpdateMarriage(ctx context.Context, id int64, input domain.MarriageInput) (domain.Marriage, error)
+	DeleteMarriage(ctx context.Context, id int64) error
+	ReplaceSpouses(ctx context.Context, memberID int64, spouseIDs []int64, note *string) error
 }
 
 // Pinger 用于健康检查，生产环境由数据库连接池实现。
@@ -123,6 +129,11 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/family-members/gedcom", s.requireAuth(http.HandlerFunc(s.handleGEDCOMExport)))
 	s.mux.Handle("POST /api/family-members/gedcom/preview", s.requireAuth(http.HandlerFunc(s.handleGEDCOMPreview)))
 	s.mux.Handle("POST /api/family-members/gedcom/import", s.requireAuth(http.HandlerFunc(s.handleGEDCOMImport)))
+
+	s.mux.Handle("GET /api/family-members/{id}/marriages", s.requireAuth(http.HandlerFunc(s.handleListMarriages)))
+	s.mux.Handle("POST /api/marriages", s.requireAuth(http.HandlerFunc(s.handleCreateMarriage)))
+	s.mux.Handle("PUT /api/marriages/{id}", s.requireAuth(http.HandlerFunc(s.handleUpdateMarriage)))
+	s.mux.Handle("DELETE /api/marriages/{id}", s.requireAuth(http.HandlerFunc(s.handleDeleteMarriage)))
 
 	s.mux.Handle("GET /api/statistics", s.requireAuth(http.HandlerFunc(s.handleStatistics)))
 

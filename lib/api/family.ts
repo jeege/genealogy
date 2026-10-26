@@ -6,8 +6,11 @@ import type {
   GEDCOMImportResult,
   ImportFatherMatch,
   ImportMemberInput,
+  Marriage,
+  MarriageInput,
   MemberInput,
   MemberOption,
+  SpouseLink,
   StatisticsData,
   TimelineMember,
 } from "./types";
@@ -26,6 +29,7 @@ export interface FamilyMemberNode {
   birthday: string | null;
   death_date: string | null;
   residence_place: string | null;
+  spouses?: SpouseLink[];
 }
 
 export type UpdateMemberInput = MemberInput & { id: number };
@@ -272,5 +276,57 @@ export async function importGEDCOM(
     return { result: payload.result ?? null, error: null };
   } catch (error) {
     return { result: null, error: message(error) };
+  }
+}
+
+export async function fetchMemberMarriages(memberId: number): Promise<{
+  data: Marriage[];
+  error: string | null;
+}> {
+  try {
+    const payload = await apiRequest<{ data: Marriage[] }>(
+      `/family-members/${memberId}/marriages`,
+    );
+    return { data: payload.data ?? [], error: null };
+  } catch (error) {
+    return { data: [], error: message(error) };
+  }
+}
+
+export async function createMarriage(
+  input: MarriageInput,
+): Promise<{ data: Marriage | null; error: string | null }> {
+  try {
+    const payload = await apiRequest<{ data: Marriage }>("/marriages", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    return { data: payload.data ?? null, error: null };
+  } catch (error) {
+    return { data: null, error: message(error) };
+  }
+}
+
+export async function updateMarriage(
+  id: number,
+  input: MarriageInput,
+): Promise<{ data: Marriage | null; error: string | null }> {
+  try {
+    const payload = await apiRequest<{ data: Marriage }>(`/marriages/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
+    return { data: payload.data ?? null, error: null };
+  } catch (error) {
+    return { data: null, error: message(error) };
+  }
+}
+
+export async function deleteMarriage(id: number): Promise<{ error: string | null }> {
+  try {
+    await apiRequest<null>(`/marriages/${id}`, { method: "DELETE" });
+    return { error: null };
+  } catch (error) {
+    return { error: message(error) };
   }
 }

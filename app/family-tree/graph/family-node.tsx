@@ -24,7 +24,12 @@ export interface FamilyNodeProps {
 
 function FamilyMemberNodeComponent({ data }: FamilyNodeProps) {
   const nodeData = data;
-  
+  // 结构化配偶优先（可能多位），无关联成员时回退到文本备注。
+  const spouseLabel =
+    nodeData.spouses && nodeData.spouses.length > 0
+      ? nodeData.spouses.map((spouse) => spouse.name).join("、")
+      : nodeData.spouse;
+
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (nodeData.onToggleCollapse) {
@@ -105,14 +110,14 @@ function FamilyMemberNodeComponent({ data }: FamilyNodeProps) {
         </div>
         
         {/* 配偶信息 - 新增 */}
-        {nodeData.spouse && (
+        {spouseLabel && (
           <div className="flex items-center justify-center gap-0.5 w-full -mt-0.5 mb-0.5">
             <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap select-none">配:</span>
-            <span 
+            <span
               className="text-xs text-muted-foreground font-medium truncate max-w-[80%] text-center"
-              title={nodeData.spouse}
+              title={spouseLabel}
             >
-              {nodeData.spouse}
+              {spouseLabel}
             </span>
           </div>
         )}

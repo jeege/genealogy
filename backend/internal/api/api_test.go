@@ -95,6 +95,14 @@ type fakeMembers struct {
 	resolve     func(ctx context.Context, members []domain.ImportMember) ([]*domain.ImportFatherMatch, error)
 	importBatch func(ctx context.Context, members []domain.ImportMember) (int, error)
 	gedcom      func(ctx context.Context, tree *gedcom.ParsedTree, replace bool) (domain.GEDCOMImportResult, error)
+
+	// 配偶关系：默认实现为内存假仓库，便于接口测试。
+	allMarriages   func(ctx context.Context) ([]domain.Marriage, error)
+	marriages      func(ctx context.Context, memberID int64) ([]domain.Marriage, error)
+	createMarriage func(ctx context.Context, input domain.MarriageInput) (domain.Marriage, error)
+	updateMarriage func(ctx context.Context, id int64, input domain.MarriageInput) (domain.Marriage, error)
+	deleteMarriage func(ctx context.Context, id int64) error
+	replaceSpouses func(ctx context.Context, memberID int64, spouseIDs []int64, note *string) error
 }
 
 func (f *fakeMembers) ListMembers(ctx context.Context, page, pageSize int, search string) ([]domain.Member, int, error) {
@@ -169,6 +177,48 @@ func (f *fakeMembers) ResolveImportFathers(ctx context.Context, members []domain
 	}
 	return f.resolve(ctx, members)
 }
+func (f *fakeMembers) ListAllMarriages(ctx context.Context) ([]domain.Marriage, error) {
+	if f.allMarriages == nil {
+		return []domain.Marriage{}, nil
+	}
+	return f.allMarriages(ctx)
+}
+
+func (f *fakeMembers) ListMarriages(ctx context.Context, memberID int64) ([]domain.Marriage, error) {
+	if f.marriages == nil {
+		return []domain.Marriage{}, nil
+	}
+	return f.marriages(ctx, memberID)
+}
+
+func (f *fakeMembers) CreateMarriage(ctx context.Context, input domain.MarriageInput) (domain.Marriage, error) {
+	if f.createMarriage == nil {
+		return domain.Marriage{ID: 1, HusbandID: input.HusbandID, WifeID: input.WifeID, Status: input.Status}, nil
+	}
+	return f.createMarriage(ctx, input)
+}
+
+func (f *fakeMembers) UpdateMarriage(ctx context.Context, id int64, input domain.MarriageInput) (domain.Marriage, error) {
+	if f.updateMarriage == nil {
+		return domain.Marriage{ID: id, HusbandID: input.HusbandID, WifeID: input.WifeID, Status: input.Status}, nil
+	}
+	return f.updateMarriage(ctx, id, input)
+}
+
+func (f *fakeMembers) DeleteMarriage(ctx context.Context, id int64) error {
+	if f.deleteMarriage == nil {
+		return nil
+	}
+	return f.deleteMarriage(ctx, id)
+}
+
+func (f *fakeMembers) ReplaceSpouses(ctx context.Context, memberID int64, spouseIDs []int64, note *string) error {
+	if f.replaceSpouses == nil {
+		return nil
+	}
+	return f.replaceSpouses(ctx, memberID, spouseIDs, note)
+}
+
 func (f *fakeMembers) ImportGEDCOM(ctx context.Context, tree *gedcom.ParsedTree, replace bool) (domain.GEDCOMImportResult, error) {
 	if f.gedcom == nil {
 		return domain.GEDCOMImportResult{Members: len(tree.Members), Families: tree.Families}, nil
@@ -637,5 +687,115 @@ func TestGEDCOMRawBodyAndEncoding(t *testing.T) {
 	plain.Handler().ServeHTTP(invalidRecorder, invalid)
 	if invalidRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("非法原始内容应返回 400：%d", invalidRecorder.Code)
+	}
+}
+
+func TestMarriageEndpoints(t *testing.T) {
+	var created domain.MarriageInput
+	var deletedID int64
+	members := &fakeMembers{
+		marriages: func(_ context.Context, memberID int64) ([]domain.Marriage, error) {
+			if memberID != 7 {
+				t.Fatalf("成员 ID 错误：%d", memberID)
+			}
+			wifeID := int64(8)
+			wife := "王氏"
+			return []domain.Marriage{{
+				ID: 1, HusbandID: 7, Husband: "刘一", WifeID: &wifeID, Wife: &wife,
+				Status: domain.MarriageMarried,
+			}}, nil
+		},
+		createMarriage: func(_ context.Context, input domain.MarriageInput) (domain.Marriage, error) {
+			created = input
+			return domain.Marriage{ID: 2, HusbandID: input.HusbandID, WifeID: input.WifeID, Status: input.Status}, nil
+		},
+		deleteMarriage: func(_ context.Context, id int64) error {
+			deletedID = id
+			return nil
+		},
+	}
+	server := testServer(t, authenticatedAuth(), members, fakePinger{})
+
+	list := perform(t, server, http.MethodGet, "/api/family-members/7/marriages", nil, nil, authCookie())
+	if list.Code != http.StatusOK || !strings.Contains(list.Body.String(), "王氏") {
+		t.Fatalf("读取配偶失败：%d %s", list.Code, list.Body.String())
+	}
+
+	create := perform(t, server, http.MethodPost, "/api/marriages", map[string]any{
+		"husband_id": 7, "wife_id": 8, "status": "divorced", "married_on": "2000-01-01",
+	}, nil, authCookie())
+	if create.Code != http.StatusCreated {
+		t.Fatalf("新增配偶失败：%d %s", create.Code, create.Body.String())
+	}
+	if created.Status != domain.MarriageDivorced || created.MarriedOn == nil || *created.MarriedOn != "2000-01-01" {
+		t.Fatalf("配偶输入映射错误：%+v", created)
+	}
+
+	remove := perform(t, server, http.MethodDelete, "/api/marriages/5", nil, nil, authCookie())
+	if remove.Code != http.StatusNoContent || deletedID != 5 {
+		t.Fatalf("解除配偶失败：%d deleted=%d", remove.Code, deletedID)
+	}
+}
+
+func TestMarriageValidation(t *testing.T) {
+	server := testServer(t, authenticatedAuth(), &fakeMembers{}, fakePinger{})
+	cases := []struct {
+		name string
+		body map[string]any
+		want string
+	}{
+		{"缺少丈夫", map[string]any{"wife_id": 2}, "请选择"},
+		{"非法状态", map[string]any{"husband_id": 1, "status": "unknown"}, "婚姻状态"},
+		{"非法日期", map[string]any{"husband_id": 1, "married_on": "2000/01/01"}, "YYYY-MM-DD"},
+		{"日期颠倒", map[string]any{"husband_id": 1, "wife_id": 2, "married_on": "2010-01-01", "divorced_on": "2000-01-01"}, "早于"},
+		{"自己配偶", map[string]any{"husband_id": 1, "wife_id": 1}, "同一个人"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			response := perform(t, server, http.MethodPost, "/api/marriages", testCase.body, nil, authCookie())
+			if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), testCase.want) {
+				t.Fatalf("%s 应返回 400：%d %s", testCase.name, response.Code, response.Body.String())
+			}
+		})
+	}
+}
+
+func TestMemberSpouseIDsTriggerReplace(t *testing.T) {
+	var replaced []int64
+	var replacedMember int64
+	members := &fakeMembers{
+		create: func(_ context.Context, input domain.MemberInput) (domain.Member, error) {
+			return domain.Member{ID: 42, Name: input.Name}, nil
+		},
+		get: func(_ context.Context, id int64) (domain.Member, error) {
+			return domain.Member{ID: id, Name: "刘一", Spouses: []domain.SpouseLink{{MarriageID: 1, Name: "王氏"}}}, nil
+		},
+		replaceSpouses: func(_ context.Context, memberID int64, spouseIDs []int64, _ *string) error {
+			replacedMember = memberID
+			replaced = spouseIDs
+			return nil
+		},
+	}
+	server := testServer(t, authenticatedAuth(), members, fakePinger{})
+	response := perform(t, server, http.MethodPost, "/api/family-members", map[string]any{
+		"name": "刘一", "spouse_ids": []int64{3, 4},
+	}, nil, authCookie())
+	if response.Code != http.StatusCreated {
+		t.Fatalf("新增成员失败：%d %s", response.Code, response.Body.String())
+	}
+	if replacedMember != 42 || len(replaced) != 2 || replaced[0] != 3 {
+		t.Fatalf("配偶同步参数错误：member=%d ids=%v", replacedMember, replaced)
+	}
+	if !strings.Contains(response.Body.String(), "王氏") {
+		t.Fatalf("响应应包含配偶摘要：%s", response.Body.String())
+	}
+
+	// 不传 spouse_ids 时不应改动婚姻
+	replaced = nil
+	unchanged := perform(t, server, http.MethodPost, "/api/family-members", map[string]any{
+		"name": "刘二",
+	}, nil, authCookie())
+	if unchanged.Code != http.StatusCreated || replaced != nil {
+		t.Fatalf("未提供 spouse_ids 时不应修改婚姻：%d %v", unchanged.Code, replaced)
 	}
 }

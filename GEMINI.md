@@ -128,9 +128,17 @@ useEffect(() => { /* 重新拉取 */ }, [page, search, version]);
     - **年龄分布**: 柱状图展示在世成员的年龄段分布（基于生日数据）。
     - **字辈趋势**: 自动统计姓名中第二个字（通常为字辈）的出现频率。
 
+### 配偶关系 (`marriages`)
+- `marriages` 表：`husband_id`、`wife_id`（可空）、`status`（married/divorced/widowed）、
+  `married_on`/`divorced_on` 与原始文本列、`note`。
+- 一位成员可有多段婚姻；同一对成员唯一；删除成员级联删除婚姻。
+- 成员查询会批量附带 `spouses` 摘要（`ListSpouseLinks`），避免 N+1。
+- `family_members.spouse` 仅作配偶备注文本，兼容旧数据与 CSV 导入。
+- 编辑入口 `app/family-tree/spouse-editor.tsx`；API 见 `POST /api/marriages` 等。
+
 ### GEDCOM 导入导出 (`backend/internal/gedcom/`)
 - 解析 GEDCOM 5.5.1 子集：`INDI`、`FAM`、`NAME`/`SEX`/`BIRT`/`DEAT`/`NOTE`/`OCCU`/`RESI`，
-  扩展标签 `_GENC`/`_SIBO`/`_SPO`/`_ALIV`。
+  扩展标签 `_GENC`/`_SIBO`/`_SPO`/`_ALIV`；`HUSB`/`WIFE` + `MARR`/`DIV` 映射为婚姻记录。
 - 导入时由父亲链推导世代，同一 `FAM` 内 `CHIL` 顺序作为排行。
 - 日期原始文本保留在 `birth_date_raw`/`death_date_raw`，同时解析 ISO 日期。
 - 自动识别 UTF-8 与 GB18030；API 见 `GET /api/family-members/gedcom` 等。
@@ -173,6 +181,10 @@ useEffect(() => { /* 重新拉取 */ }, [page, search, version]);
 ## 数据库 Schema
 
 迁移位于 `backend/internal/database/migrations/`，启动时自动执行。
+
+### marriages 表
+- `husband_id`、`wife_id`、`status`、`married_on`、`divorced_on`、原始日期文本、`note`
+- `wife_id` 可空；同一对成员唯一；删除成员级联删除
 
 ### 认证表
 - `users`：邮箱（小写唯一）、bcrypt 密码散列；

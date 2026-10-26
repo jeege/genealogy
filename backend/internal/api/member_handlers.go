@@ -27,6 +27,9 @@ type memberPayload struct {
 	Birthday         *string `json:"birthday"`
 	DeathDate        *string `json:"death_date"`
 	ResidencePlace   *string `json:"residence_place"`
+	// SpouseIDs 用于在同一请求中维护配偶关系；不传表示保持不变。
+	SpouseIDs  *[]int64 `json:"spouse_ids"`
+	SpouseNote *string  `json:"spouse_note"`
 }
 
 func (p memberPayload) toInput() (domain.MemberInput, error) {
@@ -82,6 +85,8 @@ func (p memberPayload) toInput() (domain.MemberInput, error) {
 		Birthday:         birthday,
 		DeathDate:        deathDate,
 		ResidencePlace:   trimmed(p.ResidencePlace),
+		SpouseIDs:        p.SpouseIDs,
+		SpouseNote:       trimmed(p.SpouseNote),
 	}, nil
 }
 
@@ -222,6 +227,15 @@ func (s *Server) handleCreateMember(w http.ResponseWriter, r *http.Request) {
 		s.handleError(w, err, "新增成员")
 		return
 	}
+	if err := s.replaceSpousesFromInput(r, member.ID, input); err != nil {
+		s.handleError(w, err, "保存配偶关系")
+		return
+	}
+	if input.SpouseIDs != nil {
+		if refreshed, err := s.members.GetMember(r.Context(), member.ID); err == nil {
+			member = refreshed
+		}
+	}
 	writeJSON(w, http.StatusCreated, map[string]any{"data": member})
 }
 
@@ -251,6 +265,15 @@ func (s *Server) handleUpdateMember(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.handleError(w, err, "更新成员")
 		return
+	}
+	if err := s.replaceSpousesFromInput(r, member.ID, input); err != nil {
+		s.handleError(w, err, "保存配偶关系")
+		return
+	}
+	if input.SpouseIDs != nil {
+		if refreshed, err := s.members.GetMember(r.Context(), member.ID); err == nil {
+			member = refreshed
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": member})
 }

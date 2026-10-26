@@ -28,10 +28,14 @@ func Open(ctx context.Context, databaseURL string) (*Database, error) {
 	if err != nil {
 		return nil, fmt.Errorf("解析 DATABASE_URL 失败：%w", err)
 	}
-	if config.MaxConns < 10 {
+	// 尊重 DATABASE_URL 中的 pool_max_conns（pgx 默认 4）；只有完全未指定时才提升到 10。
+	// 连接数受限的托管数据库或单连接代理（PgBouncer、PGlite）可通过 DSN 显式调低。
+	if !strings.Contains(databaseURL, "pool_max_conns") && config.MaxConns < 10 {
 		config.MaxConns = 10
 	}
-	config.MinConns = 1
+	if config.MinConns > config.MaxConns {
+		config.MinConns = config.MaxConns
+	}
 	config.MaxConnLifetime = time.Hour
 	config.MaxConnIdleTime = 30 * time.Minute
 	config.HealthCheckPeriod = time.Minute

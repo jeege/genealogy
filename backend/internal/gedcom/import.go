@@ -14,6 +14,7 @@ type ParsedTree struct {
 	Encoding        string
 	Version         string
 	Members         []domain.GEDCOMMember
+	Unions          []domain.GEDCOMUnion
 	Families        int
 	IgnoredRecords  int
 	UnsupportedTags []string
@@ -50,10 +51,43 @@ func ParseTree(text string) (*ParsedTree, error) {
 		byXref[members[index].Xref] = &members[index]
 	}
 
+	unions := make([]domain.GEDCOMUnion, 0, len(document.Families))
+
 	// FAMC 指向出生家庭，HUSB/WIFE 指向配偶；CHIL 给出子女。
 	for _, family := range document.Families {
 		xref := normalizeXref(family.Xref)
 		husband := normalizeXref(childValue(family, "HUSB"))
+		wife := normalizeXref(childValue(family, "WIFE"))
+		if husband != "" && wife != "" && husband != wife {
+			union := domain.GEDCOMUnion{
+				HusbandXref: husband,
+				FamilyXref:  xref,
+				Status:      "married",
+			}
+			wifeValue := wife
+			union.WifeXref = &wifeValue
+			if dateNode := childValue(family, "MARR", "DATE"); dateNode != "" {
+				union.Married = ParseDate(dateNode)
+			}
+			if dateNode := childValue(family, "DIV", "DATE"); dateNode != "" {
+				union.Divorced = ParseDate(dateNode)
+				union.Status = "divorced"
+			}
+			unions = append(unions, union)
+			// 记录到个人，便于导出时还原已知配偶姓名。
+			if member, ok := byXref[husband]; ok && member.Spouse == nil {
+				if partner, ok := byXref[wife]; ok && partner.Name != "" {
+					name := partner.Name
+					member.Spouse = &name
+				}
+			}
+			if member, ok := byXref[wife]; ok && member.Spouse == nil {
+				if partner, ok := byXref[husband]; ok && partner.Name != "" {
+					name := partner.Name
+					member.Spouse = &name
+				}
+			}
+		}
 		childXrefs := make([]string, 0, 4)
 		for _, childNode := range children(family, "CHIL") {
 			if child := normalizeXref(childNode.Value); child != "" {
@@ -143,6 +177,7 @@ func ParseTree(text string) (*ParsedTree, error) {
 		Members:         members,
 		Families:        len(document.Families),
 		IgnoredRecords:  document.IgnoredRecords,
+		Unions:          unions,
 		UnsupportedTags: sortedKeys(unsupported),
 		Warnings:        buildWarnings(members, unsupported, danglingFathers),
 		fatherXref:      fatherXref,
@@ -382,6 +417,7 @@ func Preview(tree *ParsedTree) domain.GEDCOMImportPreview {
 		Version:         tree.Version,
 		Members:         len(tree.Members),
 		Families:        tree.Families,
+		Unions:          len(tree.Unions),
 		IgnoredRecords:  tree.IgnoredRecords,
 		UnsupportedTags: tree.UnsupportedTags,
 		Warnings:        tree.Warnings,

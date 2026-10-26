@@ -16,6 +16,8 @@ type ExportOptions struct {
 	FileName string
 	// Now 便于测试固定导出日期；为零值时使用当前时间。
 	Now time.Time
+	// Marriages 是结构化配偶关系；缺省时仅导出成员上的配偶文本备注。
+	Marriages []domain.Marriage
 }
 
 // Export 将成员序列化为 GEDCOM 5.5.1 文本（UTF-8，CRLF 行尾）。
@@ -63,17 +65,87 @@ func Export(members []domain.Member, options ExportOptions) string {
 		fatherIDs = append(fatherIDs, fatherID)
 	}
 	sort.Slice(fatherIDs, func(i, j int) bool { return fatherIDs[i] < fatherIDs[j] })
+	// 家庭记录按「丈夫 + 妻子」聚合：既表达配偶关系，也承载子女。
+	type familyKey struct {
+		husband int64
+		wife    int64
+	}
+	type family struct {
+		husband  int64
+		wife     int64
+		children []domain.Member
+		marriage *domain.Marriage
+	}
+	families := make(map[familyKey]*family)
+	order := make([]familyKey, 0, len(fatherIDs)+len(options.Marriages))
+
+	keyOf := func(husband, wife int64) familyKey { return familyKey{husband: husband, wife: wife} }
+	ensure := func(husband, wife int64) *family {
+		key := keyOf(husband, wife)
+		existing, ok := families[key]
+		if ok {
+			return existing
+		}
+		created := &family{husband: husband, wife: wife}
+		families[key] = created
+		order = append(order, key)
+		return created
+	}
+
+	for _, marriage := range options.Marriages {
+		// 统一以较小的 ID 作为 HUSB，避免同一对成员生成两种键。
+		husband, wife := marriage.HusbandID, int64(0)
+		if marriage.WifeID != nil {
+			wife = *marriage.WifeID
+		}
+		if wife != 0 && husband > wife {
+			husband, wife = wife, husband
+		}
+		entry := ensure(husband, wife)
+		if entry.marriage == nil {
+			marriageCopy := marriage
+			entry.marriage = &marriageCopy
+		}
+	}
+
 	for _, fatherID := range fatherIDs {
-		father, ok := byID[fatherID]
-		if !ok {
+		if _, ok := byID[fatherID]; !ok {
 			continue
 		}
-		writeLine(&builder, 0, fmt.Sprintf("@F%d@", fatherID), "FAM")
-		writeLine(&builder, 1, "HUSB", individualXref(father.ID))
 		children := childrenByFather[fatherID]
 		sortMembers(children)
-		for _, child := range children {
+		// 子女归属到该父亲作为丈夫的家庭；父亲没有配偶时 wife 为 0。
+		entry := ensure(fatherID, 0)
+		entry.children = append(entry.children, children...)
+	}
+
+	sort.Slice(order, func(i, j int) bool {
+		if order[i].husband != order[j].husband {
+			return order[i].husband < order[j].husband
+		}
+		return order[i].wife < order[j].wife
+	})
+	for _, key := range order {
+		entry := families[key]
+		if entry.husband == 0 {
+			continue
+		}
+		writeLine(&builder, 0, fmt.Sprintf("@F%d@", entry.husband), "FAM")
+		writeLine(&builder, 1, "HUSB", individualXref(entry.husband))
+		if entry.wife != 0 {
+			writeLine(&builder, 1, "WIFE", individualXref(entry.wife))
+		}
+		unique := make(map[int64]bool, len(entry.children))
+		for _, child := range entry.children {
+			if unique[child.ID] {
+				continue
+			}
+			unique[child.ID] = true
 			writeLine(&builder, 1, "CHIL", individualXref(child.ID))
+		}
+		if entry.marriage != nil {
+			writeDateEvent(&builder, "MARR", entry.marriage.MarriedOnRaw, entry.marriage.MarriedOn)
+			writeDateEvent(&builder, "DIV", entry.marriage.DivorcedOnRaw, entry.marriage.DivorcedOn)
 		}
 	}
 
