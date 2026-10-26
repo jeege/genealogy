@@ -53,7 +53,7 @@ export async function writeConfiguration({
 
   const values = {
     COMPOSE_PROJECT_NAME: 'pure-genealogy',
-    GENEALOGY_IMAGE: 'onehacker/pure-genealogy:latest',
+    GENEALOGY_IMAGE: 'ghcr.io/jeege/genealogy:latest',
     SITE_URL: siteUrl,
     APP_PORT: '3000',
     BIND_ADDRESS: '0.0.0.0',

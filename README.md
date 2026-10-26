@@ -172,8 +172,12 @@ docker run -d --name pure-genealogy -p 3000:8080 \
   -e ALLOW_SIGNUP=false \
   -e ADMIN_EMAIL='you@example.com' \
   -e ADMIN_PASSWORD='change-me-please' \
-  onehacker/pure-genealogy:latest
+  ghcr.io/jeege/genealogy:latest
 ```
+
+镜像发布在 GHCR：`ghcr.io/jeege/genealogy`。推送到 `main` 或打 `v*` 标签会由
+GitHub Actions 自动构建 `linux/amd64`/`linux/arm64` 双架构镜像，也可在 Actions
+页面手动触发。
 
 HTTPS、SMTP、备份恢复、从 Supabase 迁移等完整说明见
 **[Docker 部署文档](docs/docker-deployment.md)**。
@@ -221,6 +225,7 @@ Node 测试覆盖 API 客户端、数据层、导入解析、运行时配置与�
 ## 📚 文档
 
 - [后端设计与 API](docs/backend.md)
+- [GHCR 镜像与 GitHub Actions](docs/docker-deployment.md#从-ghcr-拉取镜像)
 - [Docker 部署与运维](docs/docker-deployment.md)
 - [Go 后端说明](backend/README.md)
 

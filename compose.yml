@@ -1,6 +1,6 @@
 services:
   app:
-    image: ${GENEALOGY_IMAGE:-onehacker/pure-genealogy:latest}
+    image: ${GENEALOGY_IMAGE:-ghcr.io/jeege/genealogy:latest}
     build:
       context: .
     ports:

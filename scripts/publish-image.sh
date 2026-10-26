@@ -5,6 +5,7 @@ usage() {
   cat <<'EOF'
 用法：scripts/publish-image.sh [--engine container|buildx] [--version 2026.10.16] [--push]
 默认仅构建 linux/amd64、linux/arm64，显式 --push 才推送版本标签和 latest。
+推送 GHCR 前需先执行 docker login ghcr.io（或 container registry login）。
 container 使用本机镜像存储；buildx 默认输出 docker-output/<版本>.tar OCI 归档。
 可选环境：GENEALOGY_REPOSITORY、BUILD_CPUS（默认 6）、BUILD_MEMORY（默认 8G）。
 EOF
@@ -31,8 +32,8 @@ if [[ ! "$version" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ || "$version" == lates
   echo '版本标签无效；请使用独立于 latest 的版本号。' >&2
   exit 1
 fi
-repository="${GENEALOGY_REPOSITORY:-onehacker/pure-genealogy}"
-# Apple container 推送要求显式 registry；Docker Hub 短名与自定义短名统一补全。
+repository="${GENEALOGY_REPOSITORY:-ghcr.io/jeege/genealogy}"
+# Apple container 推送要求显式 registry；短名与自定义 registry 统一补全。
 registry="${repository%%/*}"
 if [[ "$registry" != *.* && "$registry" != *:* && "$registry" != localhost ]]; then
   repository="docker.io/$repository"

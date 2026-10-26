@@ -1,6 +1,6 @@
 # Docker 部署与运维
 
-应用镜像：`docker.io/onehacker/pure-genealogy`，支持 `linux/amd64`、`linux/arm64`。
+应用镜像：`ghcr.io/jeege/genealogy`，支持 `linux/amd64`、`linux/arm64`。
 镜像内只有一个 Go 进程：前端静态页面已通过 `go:embed` 打进二进制，只需要一个外部
 PostgreSQL（Compose 会一并启动）。
 生产环境建议固定版本标签，`latest` 用于跟随最新发布。
@@ -85,7 +85,7 @@ docker run -d --name pure-genealogy -p 3000:8080 \
   -e ALLOW_SIGNUP=false \
   -e ADMIN_EMAIL='you@example.com' \
   -e ADMIN_PASSWORD='change-me-please' \
-  onehacker/pure-genealogy:latest
+  ghcr.io/jeege/genealogy:latest
 ```
 
 容器内的 Go 进程监听 `0.0.0.0:8080`，只需映射这一个端口。
@@ -219,14 +219,56 @@ curl -fsS http://localhost:3000/api/health
 | 页面显示数据库错误 | 检查 `DATABASE_URL` 的 `sslmode`、网络白名单与连接数 |
 | 页面 404 但 API 正常 | 镜像构建时未包含前端，请用仓库 Dockerfile 重新构建 |
 
-## 构建与发布镜像
+## 从 GHCR 拉取镜像
 
-多架构构建：
+镜像发布在 GitHub Container Registry：`ghcr.io/jeege/genealogy`。
+
+公开仓库的包默认继承仓库可见性；若包被设为私有，需要先登录：
 
 ```bash
-bash scripts/publish-image.sh --engine buildx --version 2026.10.26
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u <你的 GitHub 用户名> --password-stdin
+docker pull ghcr.io/jeege/genealogy:latest
 ```
 
-加 `--push` 发布到 registry。Dockerfile 先执行 `npm run build` 生成静态页面，再复制进
-`backend/internal/web/dist` 并 `go build`，最终镜像只包含一个静态链接的 Go 二进制。
-发布前会运行 Node 与 Go 测试（CI 见 `.github/workflows/docker-image.yml`）。
+可用标签：
+
+| 触发方式 | 生成的标签 |
+| --- | --- |
+| 推送到 `main` | `main`、`sha-<短提交>`、`latest` |
+| 推送 `v1.2.3` 标签 | `1.2.3`、`1.2`、`sha-<短提交>` |
+| 手动触发并填写版本 | 该版本号（同时保留分支/sha/latest 中适用的标签） |
+
+## 使用 GitHub Actions 发布镜像
+
+工作流 [`.github/workflows/docker-image.yml`](../.github/workflows/docker-image.yml) 在以下情况运行：
+
+- 推送到 `main`（仅文档类改动会跳过）；
+- 推送 `v*` 标签；
+- 在 Actions 页面手动运行，可填写自定义版本标签。
+
+流程依次执行 `npm ci`、`npm test`（Node + Go）、`tsc --noEmit`、静态导出与
+Go 单二进制构建校验，然后用 Buildx 构建 `linux/amd64` 与 `linux/arm64` 双架构镜像并推送。
+构建使用 GitHub Actions 缓存与 `GITHUB_TOKEN`，**无需配置任何仓库密钥**。
+
+仓库设置要点：
+
+1. Settings → Actions → General → Workflow permissions 选择
+   “Read and write permissions”，或确认 `packages: write` 生效；
+2. 首次推送后到 Packages 页面确认包可见性（公开项目建议设为 Public）；
+3. 私有包需要拉取时，使用带 `read:packages` 的 Personal Access Token。
+
+## 本地手动发布
+
+```bash
+docker login ghcr.io -u <用户名>   # 或 echo $TOKEN | docker login ghcr.io -u <用户名> --password-stdin
+
+# 仅构建双架构 OCI 归档，不推送
+bash scripts/publish-image.sh --engine buildx --version 2026.10.26
+
+# 构建并推送到 ghcr.io/jeege/genealogy
+bash scripts/publish-image.sh --engine buildx --version 2026.10.26 --push
+```
+
+可用 `GENEALOGY_REPOSITORY` 覆盖目标仓库，例如 `GENEALOGY_REPOSITORY=ghcr.io/其他用户/其他仓库`。
+Dockerfile 先执行 `npm run build` 生成静态页面，再复制进 `backend/internal/web/dist`
+并 `go build`，最终镜像只包含一个静态链接的 Go 二进制。
