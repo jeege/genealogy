@@ -78,12 +78,19 @@ interface CoupleUnitLayout {
   unit: CoupleUnit;
   /** React Flow 节点 id：主成员 ID。 */
   id: string;
-  /** 渲染宽度：有配偶时比单节点更宽，容纳并排的两个头像块。 */
+  /** 渲染宽度：按配偶数量增长，容纳并排的成员块。 */
   width: number;
 }
 
-/** 夫妻合并节点的宽度：主成员 + 同伴面板。 */
-const COUPLE_NODE_WIDTH = 250;
+/** 单成员节点宽度。 */
+const NODE_UNIT_WIDTH = 190;
+/** 每多一位配偶增加的宽度（含连接符）。 */
+const PARTNER_WIDTH = 105;
+
+/** 合并节点宽度：主成员 + 每位配偶各占一栏。 */
+function unitWidth(unit: CoupleUnit): number {
+  return NODE_UNIT_WIDTH + unit.partners.length * PARTNER_WIDTH;
+}
 
 /** 收集单位的父级单位 key，用于 dagre 连线。 */
 function unitParentKey(
@@ -91,8 +98,7 @@ function unitParentKey(
   keyByMemberId: Map<number, string>,
   memberMap: Map<number, FamilyMemberNode>,
 ): string | null {
-  for (const candidate of [unit.primary, unit.partner]) {
-    if (!candidate) continue;
+  for (const candidate of [unit.primary, ...unit.partners]) {
     const fatherId = candidate.father_id;
     if (fatherId === null || !memberMap.has(fatherId)) continue;
     const parentKey = keyByMemberId.get(fatherId);
@@ -119,7 +125,7 @@ function getLayoutedElements(
   const keyByMemberId = new Map<number, string>();
   for (const unit of allUnits) {
     keyByMemberId.set(unit.primary.id, unit.key);
-    if (unit.partner) keyByMemberId.set(unit.partner.id, unit.key);
+    for (const partner of unit.partners) keyByMemberId.set(partner.id, unit.key);
   }
   const unitByKey = new Map(allUnits.map((unit) => [unit.key, unit]));
 
@@ -127,7 +133,7 @@ function getLayoutedElements(
   const unitChildrenMap = new Map<string, string[]>();
   for (const unit of allUnits) {
     const ids = new Set<string>();
-    for (const memberId of [unit.primary.id, unit.partner?.id ?? -1]) {
+    for (const memberId of [unit.primary.id, ...unit.partners.map((partner) => partner.id)]) {
       for (const childId of childrenMap.get(memberId) ?? []) {
         const childKey = keyByMemberId.get(childId);
         if (childKey && childKey !== unit.key) ids.add(childKey);
@@ -150,8 +156,8 @@ function getLayoutedElements(
   const setDescendantColors = (unitKey: string, color: HSLColor) => {
     const unit = unitByKey.get(unitKey);
     if (!unit) return;
-    for (const member of [unit.primary, unit.partner]) {
-      if (member && !memberBaseColorMap.has(member.id)) {
+    for (const member of [unit.primary, ...unit.partners]) {
+      if (!memberBaseColorMap.has(member.id)) {
         memberBaseColorMap.set(member.id, color);
       }
     }
@@ -185,11 +191,7 @@ function getLayoutedElements(
 
   const visibleUnits: CoupleUnitLayout[] = visibleUnitKeys.map((unitKey) => {
     const unit = unitByKey.get(unitKey)!;
-    return {
-      unit,
-      id: unit.key,
-      width: unit.partner ? COUPLE_NODE_WIDTH : NODE_WIDTH,
-    };
+    return { unit, id: unit.key, width: unitWidth(unit) };
   });
 
   // 4. dagre 布局：节点是合并单元，边是单元的父子关系。
@@ -263,8 +265,9 @@ function getLayoutedElements(
     const nodeData: FamilyNodeData = {
       ...member,
       // 配偶作为同一节点的同伴面板，不再单独占一个节点。
-      partner: unit.partner,
-      isHighlighted: member.id === highlightedId || unit.partner?.id === highlightedId,
+      partners: unit.partners,
+      isHighlighted:
+        member.id === highlightedId || unit.partners.some((p) => p.id === highlightedId),
       hasChildren: children.length > 0,
       collapsed: collapsedIds.has(member.id),
       onToggleCollapse,
@@ -346,7 +349,7 @@ const FamilyTreeGraphInner = memo(function FamilyTreeGraphInner({ initialData, o
     const map = new Map<number, string>();
     for (const unit of units) {
       map.set(unit.primary.id, unit.key);
-      if (unit.partner) map.set(unit.partner.id, unit.key);
+      for (const partner of unit.partners) map.set(partner.id, unit.key);
     }
     return map;
   }, [initialData, childrenMap]);
@@ -430,7 +433,7 @@ const FamilyTreeGraphInner = memo(function FamilyTreeGraphInner({ initialData, o
         if (node.type !== "familyMember") continue;
         const data = node.data as FamilyNodeData;
         keyByMemberId.set(data.id, node.id);
-        if (data.partner) keyByMemberId.set(data.partner.id, node.id);
+        for (const partner of data.partners ?? []) keyByMemberId.set(partner.id, node.id);
       }
       return { ...layout, keyByMemberId };
     },

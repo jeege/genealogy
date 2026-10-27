@@ -13,8 +13,8 @@ export interface FamilyNodeData extends FamilyMemberNode {
   collapsed?: boolean;
   onToggleCollapse?: (id: number) => void;
   branchColor?: string;
-  /** 与主成员合并渲染的配偶；有值时节点展示为夫妻双栏。 */
-  partner?: FamilyMemberNode | null;
+  /** 与主成员合并渲染的配偶列表（支持多次婚姻）；非空时节点展示为多栏。 */
+  partners?: FamilyMemberNode[];
   /** 节点渲染宽度，用于夫妻双栏排布。 */
   nodeWidth?: number;
   /** 点击配偶面板时回调（由父组件切换到该成员的详情）。 */
@@ -136,7 +136,8 @@ function MemberBlock({
 
 function FamilyMemberNodeComponent({ data }: FamilyNodeProps) {
   const nodeData = data as FamilyNodeData;
-  const partner = nodeData.partner ?? null;
+  const partners = nodeData.partners ?? [];
+  const hasPartners = partners.length > 0;
   // 结构化配偶优先（可能多位），无关联成员时回退到文本备注。
   const spouseLabel =
     nodeData.spouses && nodeData.spouses.length > 0
@@ -154,12 +155,12 @@ function FamilyMemberNodeComponent({ data }: FamilyNodeProps) {
     <div
       className={cn(
         "px-3 py-3 rounded-lg border-2 text-card-foreground shadow-md transition-all duration-300 relative group",
-        !partner && "min-w-[140px]",
+        !hasPartners && "min-w-[140px]",
         // 变暗模式 (当有高亮发生，但此节点不在路径上)
         nodeData.isDimmed && "opacity-30 grayscale scale-95 blur-[0.5px]",
 
         // 背景色：合并节点保持中性，已故观感由各自的成员块表达
-        partner || nodeData.is_alive ? "bg-card" : "bg-muted/50",
+        hasPartners || nodeData.is_alive ? "bg-card" : "bg-muted/50",
 
         // 边框颜色逻辑
         // 1. 当前选中高亮 -> 黄色光环 (最强)
@@ -168,8 +169,8 @@ function FamilyMemberNodeComponent({ data }: FamilyNodeProps) {
           // 2. 路径高亮 -> 金色边框 (次强)
           : nodeData.isPathHighlighted
             ? "border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.4)] z-10"
-            // 3. 常规边框 -> 单成员按性别/状态；夫妻双方性别不同，用中性边框
-            : partner
+            // 3. 常规边框 -> 单成员按性别/状态；合并节点性别不一，用中性边框
+            : hasPartners
               ? "border-border"
               : borderClass(nodeData),
 
@@ -177,7 +178,7 @@ function FamilyMemberNodeComponent({ data }: FamilyNodeProps) {
         !nodeData.isDimmed && nodeData.collapsed && "border-primary shadow-lg",
 
         // 已故样式：只用于单成员节点，合并节点由各自的成员块表达
-        !partner && !nodeData.is_alive && !nodeData.isDimmed && "opacity-80 grayscale-[0.2]",
+        !hasPartners && !nodeData.is_alive && !nodeData.isDimmed && "opacity-80 grayscale-[0.2]",
 
         // 悬浮提升感
         "hover:shadow-xl hover:-translate-y-0.5 transition-transform duration-300",
@@ -190,29 +191,22 @@ function FamilyMemberNodeComponent({ data }: FamilyNodeProps) {
       )}
       style={nodeData.nodeWidth ? { width: nodeData.nodeWidth } : undefined}
     >
-      {/* 顶部颜色横条：合并节点左右各半，分别反映两人的性别与在世状态 */}
-      {partner ? (
+      {/* 顶部颜色横条：合并节点按栏位等分，分别反映各人的性别与在世状态 */}
+      {hasPartners ? (
         <div className="absolute top-0 inset-x-0 h-1 rounded-t-[inherit] flex overflow-hidden">
-          <div
-            className={cn(
-              "flex-1",
-              nodeData.isHighlighted
-                ? "bg-amber-500"
-                : nodeData.isPathHighlighted
-                  ? "bg-amber-400"
-                  : barClass(nodeData),
-            )}
-          />
-          <div
-            className={cn(
-              "flex-1",
-              nodeData.isHighlighted
-                ? "bg-amber-500"
-                : nodeData.isPathHighlighted
-                  ? "bg-amber-400"
-                  : barClass(partner),
-            )}
-          />
+          {[nodeData, ...partners].map((member, index) => (
+            <div
+              key={`${member.id}-${index}`}
+              className={cn(
+                "flex-1",
+                nodeData.isHighlighted
+                  ? "bg-amber-500"
+                  : nodeData.isPathHighlighted
+                    ? "bg-amber-400"
+                    : barClass(member),
+              )}
+            />
+          ))}
         </div>
       ) : (
         <div
@@ -234,35 +228,33 @@ function FamilyMemberNodeComponent({ data }: FamilyNodeProps) {
         className="!w-3 !h-3 !bg-primary !border-2 !border-background"
       />
 
-      {/* 节点内容：有配偶时并排展示，无配偶时单栏 */}
-      {partner ? (
+      {/* 节点内容：有配偶时并排展示（支持多位），无配偶时单栏 */}
+      {hasPartners ? (
         <div className="flex items-stretch gap-0 w-full">
           <div className="flex-1 min-w-0">
             <MemberBlock member={nodeData} />
           </div>
-          {/* 夫妻连接符：细分隔线 + 单字标记，避免竖排两字显得拥挤 */}
-          <div className="flex flex-col items-center justify-center px-1.5 select-none">
-            <span
-              aria-hidden
-              className="w-px flex-1 bg-border"
-            />
-            <span className="my-1 text-[10px] text-muted-foreground/70 leading-none">配</span>
-            <span
-              aria-hidden
-              className="w-px flex-1 bg-border"
-            />
-          </div>
-          <div className="flex-1 min-w-0">
-            <MemberBlock
-              member={partner}
-              compact
-              onSelect={
-                nodeData.onPartnerClick
-                  ? () => nodeData.onPartnerClick!(partner)
-                  : undefined
-              }
-            />
-          </div>
+          {partners.map((partner) => (
+            <div key={partner.id} className="flex items-stretch min-w-0 flex-1">
+              {/* 连接符：细分隔线 + 单字标记，避免竖排两字显得拥挤 */}
+              <div className="flex flex-col items-center justify-center px-1.5 select-none">
+                <span aria-hidden className="w-px flex-1 bg-border" />
+                <span className="my-1 text-[10px] text-muted-foreground/70 leading-none">配</span>
+                <span aria-hidden className="w-px flex-1 bg-border" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <MemberBlock
+                  member={partner}
+                  compact
+                  onSelect={
+                    nodeData.onPartnerClick
+                      ? () => nodeData.onPartnerClick!(partner)
+                      : undefined
+                  }
+                />
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <div className="flex flex-col items-center gap-1.5 mb-1 w-full">
