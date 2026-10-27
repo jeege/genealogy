@@ -37,16 +37,17 @@ test("浏览器 API 客户端同源请求 /api，并保持认证错误可读", a
     const calls = [];
     globalThis.fetch = async (url, init) => {
       calls.push({ url, init });
-      return jsonResponse({ user: { id: 1, email: "a@example.com" } });
+      return jsonResponse({ user: { id: 1, username: "张三" } });
     };
-    const user = await client.login("a@example.com", "password123");
-    assert.equal(user.email, "a@example.com");
+    // 用户名不限制字符：这里直接用中文用户名验证请求体字段名。
+    const user = await client.login("张三", "password123");
+    assert.equal(user.username, "张三");
     assert.equal(calls[0].url, "/api/auth/login");
     assert.equal(calls[0].init.credentials, "same-origin");
-    assert.deepEqual(JSON.parse(calls[0].init.body), { email: "a@example.com", password: "password123" });
+    assert.deepEqual(JSON.parse(calls[0].init.body), { username: "张三", password: "password123" });
 
-    globalThis.fetch = async () => jsonResponse({ error: "邮箱或密码错误" }, 401);
-    await assert.rejects(client.login("a@example.com", "bad"), /邮箱或密码错误/);
+    globalThis.fetch = async () => jsonResponse({ error: "用户名或密码错误" }, 401);
+    await assert.rejects(client.login("张三", "bad"), /用户名或密码错误/);
 
     globalThis.fetch = async () => jsonResponse({ error: "请先登录" }, 401);
     assert.equal(await client.getSession(), null);

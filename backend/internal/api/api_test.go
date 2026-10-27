@@ -17,32 +17,29 @@ import (
 	"github.com/yunfengsa/pure-genealogy/backend/internal/config"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/domain"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/gedcom"
-	"github.com/yunfengsa/pure-genealogy/backend/internal/mailer"
 	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
 type fakeAuth struct {
-	signUp       func(ctx context.Context, email, password string) (auth.Session, error)
-	login        func(ctx context.Context, email, password string) (auth.Session, error)
+	signUp       func(ctx context.Context, username, password string) (auth.Session, error)
+	login        func(ctx context.Context, username, password string) (auth.Session, error)
 	authenticate func(ctx context.Context, token string) (domain.User, error)
 	logout       func(ctx context.Context, token string) error
-	forgot       func(ctx context.Context, email string) (string, domain.User, bool, error)
-	reset        func(ctx context.Context, token, password string) error
 	change       func(ctx context.Context, userID int64, current, next string) error
 }
 
-func (f *fakeAuth) SignUp(ctx context.Context, email, password string) (auth.Session, error) {
+func (f *fakeAuth) SignUp(ctx context.Context, username, password string) (auth.Session, error) {
 	if f.signUp == nil {
 		return auth.Session{}, errors.New("未预期的 SignUp")
 	}
-	return f.signUp(ctx, email, password)
+	return f.signUp(ctx, username, password)
 }
 
-func (f *fakeAuth) Login(ctx context.Context, email, password string) (auth.Session, error) {
+func (f *fakeAuth) Login(ctx context.Context, username, password string) (auth.Session, error) {
 	if f.login == nil {
 		return auth.Session{}, errors.New("未预期的 Login")
 	}
-	return f.login(ctx, email, password)
+	return f.login(ctx, username, password)
 }
 
 func (f *fakeAuth) Authenticate(ctx context.Context, token string) (domain.User, error) {
@@ -57,20 +54,6 @@ func (f *fakeAuth) Logout(ctx context.Context, token string) error {
 		return nil
 	}
 	return f.logout(ctx, token)
-}
-
-func (f *fakeAuth) CreatePasswordReset(ctx context.Context, email string) (string, domain.User, bool, error) {
-	if f.forgot == nil {
-		return "", domain.User{}, false, nil
-	}
-	return f.forgot(ctx, email)
-}
-
-func (f *fakeAuth) ResetPassword(ctx context.Context, token, password string) error {
-	if f.reset == nil {
-		return nil
-	}
-	return f.reset(ctx, token, password)
 }
 
 func (f *fakeAuth) ChangePassword(ctx context.Context, userID int64, current, next string) error {
@@ -242,14 +225,12 @@ func testServer(t *testing.T, authenticator Authenticator, members MemberStore, 
 	cfg := config.Config{
 		AppOrigin:        "http://app.test",
 		AppOrigins:       []string{"http://app.test"},
-		PublicBaseURL:    "http://app.test",
 		FamilySurname:    "刘",
-		SessionTTL:       time.Hour,
-		PasswordResetTTL: time.Hour,
-		CookieSecure:     "false",
+		SessionTTL:   time.Hour,
+		CookieSecure: "false",
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	server := New(cfg, authenticator, members, pinger, mailer.New(config.SMTPConfig{}), logger)
+	server := New(cfg, authenticator, members, pinger, logger)
 	server.now = func() time.Time { return time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC) }
 	return server
 }
@@ -285,7 +266,7 @@ func authCookie() *http.Cookie {
 
 func authenticatedAuth() *fakeAuth {
 	return &fakeAuth{authenticate: func(context.Context, string) (domain.User, error) {
-		return domain.User{ID: 1, Email: "user@example.com"}, nil
+		return domain.User{ID: 1, Username: "张三"}, nil
 	}}
 }
 
@@ -302,12 +283,12 @@ func TestHealth(t *testing.T) {
 
 func TestLoginSetsCookieAndSessionReturnsUser(t *testing.T) {
 	authenticator := &fakeAuth{
-		login: func(_ context.Context, email, password string) (auth.Session, error) {
-			if email != "user@example.com" || password != "password123" {
-				t.Fatalf("登录参数错误：%s / %s", email, password)
+		login: func(_ context.Context, username, password string) (auth.Session, error) {
+			if username != "张三" || password != "password123" {
+				t.Fatalf("登录参数错误：%s / %s", username, password)
 			}
 			return auth.Session{
-				User:      domain.User{ID: 7, Email: email},
+				User:      domain.User{ID: 7, Username: username},
 				Token:     "issued-token",
 				ExpiresAt: time.Now().Add(time.Hour),
 			}, nil
@@ -316,13 +297,13 @@ func TestLoginSetsCookieAndSessionReturnsUser(t *testing.T) {
 			if token != "issued-token" {
 				t.Fatalf("会话令牌错误：%s", token)
 			}
-			return domain.User{ID: 7, Email: "user@example.com"}, nil
+			return domain.User{ID: 7, Username: "张三"}, nil
 		},
 	}
 	server := testServer(t, authenticator, &fakeMembers{}, fakePinger{})
 
 	response := perform(t, server, http.MethodPost, "/api/auth/login", map[string]string{
-		"email": "user@example.com", "password": "password123",
+		"username": "张三", "password": "password123",
 	}, nil)
 	if response.Code != http.StatusOK {
 		t.Fatalf("登录失败：%d %s", response.Code, response.Body.String())
@@ -333,7 +314,7 @@ func TestLoginSetsCookieAndSessionReturnsUser(t *testing.T) {
 	}
 
 	session := perform(t, server, http.MethodGet, "/api/auth/session", nil, nil, cookies[0])
-	if session.Code != http.StatusOK || !strings.Contains(session.Body.String(), "user@example.com") {
+	if session.Code != http.StatusOK || !strings.Contains(session.Body.String(), "张三") {
 		t.Fatalf("读取会话失败：%d %s", session.Code, session.Body.String())
 	}
 }
@@ -351,7 +332,7 @@ func TestUnauthorizedAndOriginCheck(t *testing.T) {
 	}}
 	server = testServer(t, authenticator, &fakeMembers{}, fakePinger{})
 	response := perform(t, server, http.MethodPost, "/api/auth/login", map[string]string{
-		"email": "a@example.com", "password": "password123",
+		"username": "a@example.com", "password": "password123",
 	}, map[string]string{"Origin": "http://evil.test"})
 	if response.Code != http.StatusForbidden || called {
 		t.Fatalf("跨站来源应被拒绝，code=%d called=%v", response.Code, called)
@@ -443,7 +424,7 @@ func TestSignupDisabled(t *testing.T) {
 	}}
 	server := testServer(t, authenticator, &fakeMembers{}, fakePinger{})
 	response := perform(t, server, http.MethodPost, "/api/auth/signup", map[string]string{
-		"email": "a@example.com", "password": "password123",
+		"username": "a@example.com", "password": "password123",
 	}, nil)
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("关闭注册应返回 403：%d %s", response.Code, response.Body.String())

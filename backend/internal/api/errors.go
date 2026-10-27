@@ -23,20 +23,20 @@ func (s *Server) handleError(w http.ResponseWriter, err error, operation string)
 		writeError(w, http.StatusBadRequest, marriageValidation.Message)
 	case errors.Is(err, auth.ErrSignupDisabled):
 		writeError(w, http.StatusForbidden, auth.ErrSignupDisabled.Error())
-	case errors.Is(err, domain.ErrEmailTaken):
-		writeError(w, http.StatusConflict, "该邮箱已注册")
+	case errors.Is(err, domain.ErrUsernameTaken):
+		writeError(w, http.StatusConflict, "该用户名已被占用")
 	case errors.Is(err, auth.ErrInvalidCredentials):
-		writeError(w, http.StatusUnauthorized, "邮箱或密码错误")
-	case errors.Is(err, auth.ErrInvalidEmail):
-		writeError(w, http.StatusBadRequest, auth.ErrInvalidEmail.Error())
+		writeError(w, http.StatusUnauthorized, "用户名或密码错误")
+	case errors.Is(err, auth.ErrInvalidUsername):
+		writeError(w, http.StatusBadRequest, auth.ErrInvalidUsername.Error())
+	case errors.Is(err, auth.ErrUsernameTooLong):
+		writeError(w, http.StatusBadRequest, auth.ErrUsernameTooLong.Error())
 	case errors.Is(err, auth.ErrWeakPassword):
 		writeError(w, http.StatusBadRequest, auth.ErrWeakPassword.Error())
 	case errors.Is(err, auth.ErrPasswordTooLong):
 		writeError(w, http.StatusBadRequest, auth.ErrPasswordTooLong.Error())
 	case errors.Is(err, domain.ErrInvalidSession):
 		writeError(w, http.StatusUnauthorized, "登录已过期，请重新登录")
-	case errors.Is(err, domain.ErrInvalidResetToken):
-		writeError(w, http.StatusBadRequest, "重置链接无效或已过期")
 	case errors.Is(err, domain.ErrInvalidFather):
 		writeError(w, http.StatusBadRequest, "父亲成员不存在")
 	case errors.Is(err, domain.ErrCycle):

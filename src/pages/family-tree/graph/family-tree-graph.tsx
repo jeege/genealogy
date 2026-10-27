@@ -301,13 +301,13 @@ function getLayoutedElements(
 const FamilyTreeGraphInner = memo(function FamilyTreeGraphInner({ initialData, onMemberClick }: FamilyTreeGraphInnerProps) {
   const reactFlowInstance = useReactFlow();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [userEmail, setUserEmail] = useState<string>("");
+  const [userName, setUserName] = useState<string>("");
 
   useEffect(() => {
     let cancelled = false;
     getSession()
       .then((user) => {
-        if (!cancelled && user?.email) setUserEmail(user.email);
+        if (!cancelled && user?.username) setUserName(user.username);
       })
       .catch(() => {
         // 水印邮箱只是展示信息，读取失败不影响族谱图。
@@ -742,7 +742,7 @@ const FamilyTreeGraphInner = memo(function FamilyTreeGraphInner({ initialData, o
     }
 
     // 4. 绘制水印 (平铺)
-    const watermarkText = userEmail || 'Liu Family';
+    const watermarkText = userName || 'Liu Family';
     ctx.save();
     ctx.rotate(-30 * Math.PI / 180);
     ctx.font = "16px sans-serif";
@@ -788,7 +788,7 @@ const FamilyTreeGraphInner = memo(function FamilyTreeGraphInner({ initialData, o
     a.setAttribute("download", `family-tree-${new Date().toISOString().split('T')[0]}.jpg`);
     a.setAttribute("href", finalDataUrl);
     a.click();
-  }, [nodes, userEmail]);
+  }, [nodes, userName]);
 
   const toggleDraggable = useCallback(() => {
     setIsDraggable((prev) => !prev);

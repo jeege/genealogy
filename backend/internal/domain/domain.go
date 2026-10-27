@@ -6,7 +6,7 @@ import "time"
 // User 是族谱系统的登录用户。一个部署共享一份族谱，所有用户权限相同。
 type User struct {
 	ID           int64     `json:"id"`
-	Email        string    `json:"email"`
+	Username     string    `json:"username"`
 	PasswordHash string    `json:"-"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
@@ -15,12 +15,12 @@ type User struct {
 // PublicUser 是可以返回给浏览器的用户信息，不含密码散列。
 type PublicUser struct {
 	ID        int64     `json:"id"`
-	Email     string    `json:"email"`
+	Username  string    `json:"username"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 func (u User) Public() PublicUser {
-	return PublicUser{ID: u.ID, Email: u.Email, CreatedAt: u.CreatedAt}
+	return PublicUser{ID: u.ID, Username: u.Username, CreatedAt: u.CreatedAt}
 }
 
 // Member 是族谱成员。可空字段使用指针，便于前端区分空字符串与未填写。

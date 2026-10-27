@@ -43,7 +43,7 @@ go run ./cmd/server migrate
 ## 创建账号
 
 ```bash
-ADMIN_PASSWORD='change-me-please' go run ./cmd/server user create --email you@example.com
+ADMIN_PASSWORD='change-me-please' go run ./cmd/server user create --username you@example.com
 ```
 
 ## 测试
@@ -70,12 +70,11 @@ FAMILY_SURNAME='刘' ALLOW_SIGNUP=true \
 cmd/server/                 启动、迁移、账号管理与健康检查
 internal/api/               HTTP 路由、中间件、页面鉴权与 handler
 internal/web/               go:embed 静态资源与文件服务
-internal/auth/              bcrypt、会话与密码重置
+internal/auth/              bcrypt、用户名校验与会话
 internal/config/            环境变量校验
 internal/database/          pgx 连接池与内嵌迁移
 internal/domain/            共享数据结构与错误
 internal/family/            导入规则与统计（纯函数）
-internal/mailer/            SMTP 邮件
 internal/store/             PostgreSQL 持久化
 ```
 

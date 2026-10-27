@@ -9,7 +9,7 @@
 
 - **框架**: React 19 + Vite 6 + React Router 7（纯 SPA，history 路由）
 - **后端**: Go 1.24（标准库 HTTP + pgx）
-- **数据库/认证**: PostgreSQL + 自建邮箱密码认证（服务端会话 Cookie）
+- **数据库/认证**: PostgreSQL + 自建用户名密码认证（服务端会话 Cookie）
 - **UI**: shadcn/ui (new-york 风格) + Tailwind CSS
 - **可视化**: 
     - `@xyflow/react` (React Flow) 用于 2D 族谱图
@@ -57,7 +57,7 @@ const { data, error } = await fetchAllFamilyMembers();
 
 - Go API 使用 bcrypt 散列密码，数据库只保存随机会话令牌的 SHA-256 散列。
 - 登录成功后跳转 `/family-tree/graph/`；注册成功即创建会话。
-- 认证页面位于 `app/auth/`；密码重置通过 SMTP 邮件或 API 日志中的一次性链接完成。
+- 认证页面位于 `src/pages/auth/`；登录用用户名（不限制字符，中文亦可，大小写不敏感），无邮箱与忘记密码流程。忘记密码需管理员执行 `user set-password` 重置。
 - **登录体验优化**:
     - 采用水墨山水背景（`login-bg.jpg`）及毛玻璃效果，增强家族文化氛围。
     - 登录按钮集成 `Loader2` 加载动画，提供明确的交互反馈。
@@ -177,7 +177,7 @@ useEffect(() => { /* 重新拉取 */ }, [page, search, version]);
 
 ### 导航栏 (`components/mobile-nav.tsx`)
 - 移动端使用 `MobileNav`（下拉菜单）替代桌面端水平导航。
-- `AuthButton` 在移动端会自动调整为垂直布局，并对过长的邮箱地址进行截断处理。
+- `AuthButton` 在移动端会自动调整为垂直布局，并对过长的用户名进行截断处理。
 
 ### 布局工具类使用
 - 优先使用 Tailwind 的响应式前缀（如 `md:flex`, `lg:row`）。
@@ -194,7 +194,7 @@ useEffect(() => { /* 重新拉取 */ }, [page, search, version]);
 - `wife_id` 可空；同一对成员唯一；删除成员级联删除
 
 ### 认证表
-- `users`：邮箱（小写唯一）、bcrypt 密码散列；
+- `users`：用户名（`lower(username)` 唯一，不限制字符集）、bcrypt 密码散列；
 - `sessions`：会话令牌 SHA-256、过期时间；
 - `password_reset_tokens`：一次性重置令牌、使用时间；
 - `schema_migrations`：已执行迁移版本。
@@ -250,7 +250,6 @@ DATABASE_URL=postgres://genealogy:change-me@127.0.0.1:5432/genealogy?sslmode=dis
 API_PORT=8080
 DEV_API_PROXY_TARGET=http://127.0.0.1:8080
 APP_ORIGIN=http://localhost:3000
-PUBLIC_BASE_URL=http://localhost:3000
 FAMILY_SURNAME=刘
 ALLOW_SIGNUP=true
 ```

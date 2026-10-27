@@ -19,7 +19,7 @@ git clone https://github.com/yunfengsa/pure-genealogy.git
 cd pure-genealogy
 node scripts/setup-self-hosted.mjs \
   --site-url http://localhost:3000 \
-  --admin-email you@example.com
+  --admin-username 管理员
 ```
 
 脚本会生成 `.env.self-hosted`（权限 `0600`），内容包括：
@@ -28,7 +28,7 @@ node scripts/setup-self-hosted.mjs \
 - 随机初始管理员密码（同时打印一次）；
 - `ALLOW_SIGNUP=false`、`APP_ORIGIN`、会话有效期等。
 
-如不希望脚本生成管理员，可省略 `--admin-email`，启动后使用
+如不希望脚本生成管理员，可省略 `--admin-username`，启动后使用
 `docker compose exec` 创建账号（见下文）。
 
 ### 2. 启动
@@ -64,7 +64,7 @@ POSTGRES_PASSWORD=仅用于本地 db 服务
 DATABASE_URL=postgres://user:pass@db.example.com:5432/genealogy?sslmode=require
 FAMILY_SURNAME=刘
 ALLOW_SIGNUP=false
-ADMIN_EMAIL=you@example.com
+ADMIN_USERNAME=管理员
 ADMIN_PASSWORD=change-me-please
 ```
 
@@ -80,10 +80,9 @@ docker compose --env-file .env up -d --no-deps app
 docker run -d --name pure-genealogy -p 3000:8080 \
   -e DATABASE_URL='postgres://user:pass@db.example.com:5432/genealogy?sslmode=require' \
   -e APP_ORIGIN='https://genealogy.example.com' \
-  -e PUBLIC_BASE_URL='https://genealogy.example.com' \
   -e FAMILY_SURNAME='刘' \
   -e ALLOW_SIGNUP=false \
-  -e ADMIN_EMAIL='you@example.com' \
+  -e ADMIN_USERNAME='管理员' \
   -e ADMIN_PASSWORD='change-me-please' \
   ghcr.io/jeege/genealogy:latest
 ```
@@ -94,7 +93,7 @@ docker run -d --name pure-genealogy -p 3000:8080 \
 
 ### 初始管理员
 
-设置 `ADMIN_EMAIL` 与 `ADMIN_PASSWORD` 后，首次启动且数据库没有账号时会自动创建。
+设置 `ADMIN_USERNAME` 与 `ADMIN_PASSWORD` 后，首次启动且数据库没有账号时会自动创建。用户名不限制字符，中文亦可。
 密码至少 8 个字符、最多 72 个字节。创建成功后建议从环境变量中移除密码。
 
 ### 使用 CLI 创建或重置
@@ -103,12 +102,12 @@ docker run -d --name pure-genealogy -p 3000:8080 \
 # 创建账号
 docker compose --env-file .env.self-hosted exec \
   -e ADMIN_PASSWORD='change-me-please' app \
-  genealogy-server user create --email user@example.com
+  genealogy-server user create --username 管理员
 
 # 修改密码并撤销该用户旧会话
 docker compose --env-file .env.self-hosted exec \
   -e ADMIN_PASSWORD='change-me-please' app \
-  genealogy-server user set-password --email user@example.com
+  genealogy-server user set-password --username 管理员
 ```
 
 ### 公开注册
@@ -147,26 +146,16 @@ genealogy.example.com {
 - `COOKIE_SECURE=auto` 会根据 `X-Forwarded-Proto` 设置 Secure Cookie，也可强制 `true`；
 - 应用校验写请求的 `Origin`，因此 `APP_ORIGIN` 必须是浏览器实际访问的源地址。
 
-## SMTP 与密码重置
+## 忘记密码
 
-配置以下变量后，重置密码会发送邮件：
-
-```dotenv
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_USER=noreply@example.com
-SMTP_PASS=your-smtp-password
-SMTP_FROM=noreply@example.com
-```
-
-- 端口 465 使用隐式 TLS，其他端口使用 STARTTLS；
-- 未配置 SMTP 时，接口仍返回成功，但一次性重置链接会写入 API 日志：
+本系统没有邮件找回密码功能。忘记密码时，由管理员在服务器上重置：
 
 ```bash
-docker compose --env-file .env.self-hosted logs app | grep '密码重置链接'
+docker compose --env-file .env.self-hosted exec app \
+  genealogy-server user set-password --username 管理员
 ```
 
-日志中的链接等同于账号重置权限，请限制日志访问并及时清理。
+该命令会以交互方式要求输入新密码，并撤销目标用户的全部会话（旧登录立即失效）。
 
 ## 备份与恢复
 
@@ -214,7 +203,7 @@ curl -fsS http://localhost:3000/api/health
 | --- | --- |
 | 容器反复重启 | `logs app`；确认 `DATABASE_URL` 可连接、数据库已启动 |
 | 登录后仍跳回登录页 | 检查 `APP_ORIGIN` 是否为浏览器实际地址；HTTPS 下 `COOKIE_SECURE` |
-| 收不到重置邮件 | `logs app`；检查 SMTP；未配置 SMTP 时查日志中的重置链接 |
+| 忘记密码 | 无邮件找回；管理员执行 `exec app genealogy-server user set-password --username 用户名` |
 | 迁移失败 | 确认数据库角色拥有 `public` schema 与 `family_members` 表 |
 | 页面显示数据库错误 | 检查 `DATABASE_URL` 的 `sslmode`、网络白名单与连接数 |
 | 页面 404 但 API 正常 | 镜像构建时未包含前端，请用仓库 Dockerfile 重新构建 |

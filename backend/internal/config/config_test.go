@@ -23,9 +23,6 @@ func TestLoadDefaults(t *testing.T) {
 	if !cfg.AllowSignup || !cfg.AutoMigrate || cfg.CookieSecure != "auto" {
 		t.Fatalf("开关默认值错误：%+v", cfg)
 	}
-	if cfg.PublicBaseURL != "http://localhost:3000" {
-		t.Fatalf("默认公开地址错误：%s", cfg.PublicBaseURL)
-	}
 }
 
 func TestLoadOverridesAndValidation(t *testing.T) {
@@ -39,7 +36,7 @@ func TestLoadOverridesAndValidation(t *testing.T) {
 		"AUTO_MIGRATE=false",
 		"COOKIE_SECURE=true",
 		"FAMILY_SURNAME=李",
-		"ADMIN_EMAIL=admin@example.com",
+		"ADMIN_USERNAME=admin",
 		"ADMIN_PASSWORD=strong-password",
 	)
 	cfg, err := LoadFrom(env)
@@ -47,7 +44,7 @@ func TestLoadOverridesAndValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	if cfg.Port != 9090 || cfg.Host != "0.0.0.0" || cfg.AppOrigin != "https://genealogy.example.com" ||
-		cfg.PublicBaseURL != "https://genealogy.example.com" || cfg.SessionTTL != 24*time.Hour {
+		cfg.SessionTTL != 24*time.Hour {
 		t.Fatalf("覆盖值错误：%+v", cfg)
 	}
 	if cfg.AllowSignup || cfg.AutoMigrate || cfg.CookieSecure != "true" || cfg.FamilySurname != "李" {
@@ -68,9 +65,9 @@ func TestLoadRejectsUnsafeOrIncompleteConfig(t *testing.T) {
 		{"会话过短", append(baseEnv(), "SESSION_TTL=1m"), "SESSION_TTL"},
 		{"密码散列成本越界", append(baseEnv(), "BCRYPT_COST=2"), "BCRYPT_COST"},
 		{"Cookie 开关非法", append(baseEnv(), "COOKIE_SECURE=yes"), "COOKIE_SECURE"},
-		{"管理员配置不完整", append(baseEnv(), "ADMIN_EMAIL=admin@example.com"), "同时"},
-		{"管理员密码过短", append(baseEnv(), "ADMIN_EMAIL=admin@example.com", "ADMIN_PASSWORD=short"), "ADMIN_PASSWORD"},
-		{"SMTP 缺少发件人", append(baseEnv(), "SMTP_HOST=smtp.example.com"), "SMTP_FROM"},
+		{"管理员配置不完整", append(baseEnv(), "ADMIN_USERNAME=admin"), "同时"},
+		{"管理员密码过短", append(baseEnv(), "ADMIN_USERNAME=admin", "ADMIN_PASSWORD=short"), "ADMIN_PASSWORD"},
+		{"管理员用户名过长", append(baseEnv(), "ADMIN_USERNAME="+strings.Repeat("a", 257), "ADMIN_PASSWORD=strong-password"), "ADMIN_USERNAME"},
 		{"日志级别非法", append(baseEnv(), "LOG_LEVEL=verbose"), "LOG_LEVEL"},
 		{"姓氏过长", append(baseEnv(), "FAMILY_SURNAME="+strings.Repeat("刘", 51)), "FAMILY_SURNAME"},
 	}

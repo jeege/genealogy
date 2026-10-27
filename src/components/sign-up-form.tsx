@@ -17,7 +17,7 @@ export function SignUpForm({
   className,
   ...props
 }: React.ComponentPropsWithoutRef<"div">) {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [repeatPassword, setRepeatPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +36,7 @@ export function SignUpForm({
 
     try {
       // 自建认证没有邮件确认环节，注册成功即创建服务端会话。
-      await signup(email, password);
+      await signup(username, password);
       window.location.assign("/family-tree/graph");
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "注册失败，请稍后重试");
@@ -56,15 +56,19 @@ export function SignUpForm({
           <form onSubmit={handleSignUp}>
             <div className="flex flex-col gap-6">
               <div className="grid gap-2">
-                <Label htmlFor="email">邮箱</Label>
+                <Label htmlFor="username">用户名</Label>
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="m@example.com"
+                  id="username"
+                  type="text"
+                  placeholder="请输入用户名"
+                  autoComplete="username"
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                 />
+                <p className="text-xs text-muted-foreground">
+                  用户名不限制字符，中文、空格与符号均可；登录时不分大小写。
+                </p>
               </div>
               <div className="grid gap-2">
                 <div className="flex items-center">

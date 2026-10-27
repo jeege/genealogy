@@ -36,7 +36,7 @@ test("配置包含 DATABASE_URL 与初始管理员，权限 0600 且拒绝覆盖
     const result = await writeConfiguration({
       siteUrl: "http://localhost:3000",
       surname: "刘",
-      adminEmail: "admin@example.com",
+      adminUsername: "管理员",
       output,
     });
     assert.equal(result.output, output);
@@ -47,7 +47,7 @@ test("配置包含 DATABASE_URL 与初始管理员，权限 0600 且拒绝覆盖
     assert.equal(env.POSTGRES_DB, "genealogy");
     assert.equal(env.DATABASE_URL, `postgres://genealogy:${env.POSTGRES_PASSWORD}@db:5432/genealogy?sslmode=disable`);
     assert.equal(env.ALLOW_SIGNUP, "false");
-    assert.equal(env.ADMIN_EMAIL, "admin@example.com");
+    assert.equal(env.ADMIN_USERNAME, "管理员");
     assert.equal(env.ADMIN_PASSWORD, result.adminPassword);
     assert.ok([...result.adminPassword].length >= 8);
     assert.equal(env.SESSION_TTL, "720h");
@@ -61,21 +61,22 @@ test("配置包含 DATABASE_URL 与初始管理员，权限 0600 且拒绝覆盖
     await assert.rejects(writeConfiguration({ siteUrl: "http://localhost:3000", output }), { code: "EEXIST" });
     assert.equal(await readFile(output, "utf8"), original);
     await assert.rejects(writeConfiguration({ siteUrl: "postgres://localhost", output: join(directory, "b") }));
-    await assert.rejects(writeConfiguration({ siteUrl: "http://localhost:3000", adminEmail: "bad-email", output: join(directory, "c") }), /邮箱/);
-    await assert.rejects(writeConfiguration({ siteUrl: "http://localhost:3000", adminEmail: "a@b.c", adminPassword: "short", output: join(directory, "d") }), /密码/);
+    // 用户名不限制字符集，空格与邮箱样式都允许；只拒绝空、过长与控制字符。
+    await assert.rejects(writeConfiguration({ siteUrl: "http://localhost:3000", adminUsername: "   ", output: join(directory, "c") }), /用户名/);
+    await assert.rejects(writeConfiguration({ siteUrl: "http://localhost:3000", adminUsername: "admin", adminPassword: "short", output: join(directory, "d") }), /密码/);
     await assert.rejects(writeConfiguration({ siteUrl: "http://localhost:3000", surname: '刘"\n', output: join(directory, "e") }), /姓氏/);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
 });
 
-test("未提供管理员邮箱时不写入管理员密码", async () => {
+test("未提供管理员用户名时不写入管理员密码", async () => {
   const directory = await mkdtemp(join(tmpdir(), "genealogy-config-"));
   const output = join(directory, ".env.self-hosted");
   try {
     const result = await writeConfiguration({ siteUrl: "https://genealogy.example", output });
     const env = parseEnv(await readFile(output, "utf8"));
-    assert.equal(env.ADMIN_EMAIL, "");
+    assert.equal(env.ADMIN_USERNAME, "");
     assert.equal(env.ADMIN_PASSWORD, "");
     assert.equal(result.adminPassword, "");
   } finally {

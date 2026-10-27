@@ -11,7 +11,6 @@ import (
 	"github.com/yunfengsa/pure-genealogy/backend/internal/config"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/domain"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/gedcom"
-	"github.com/yunfengsa/pure-genealogy/backend/internal/mailer"
 )
 
 // SessionCookieName 是浏览器与服务端共享的会话 Cookie 名称。
@@ -19,12 +18,10 @@ const SessionCookieName = "genealogy_session"
 
 // Authenticator 是 HTTP 层需要的认证能力。
 type Authenticator interface {
-	SignUp(ctx context.Context, email, password string) (auth.Session, error)
-	Login(ctx context.Context, email, password string) (auth.Session, error)
+	SignUp(ctx context.Context, username, password string) (auth.Session, error)
+	Login(ctx context.Context, username, password string) (auth.Session, error)
 	Authenticate(ctx context.Context, token string) (domain.User, error)
 	Logout(ctx context.Context, token string) error
-	CreatePasswordReset(ctx context.Context, email string) (string, domain.User, bool, error)
-	ResetPassword(ctx context.Context, token, password string) error
 	ChangePassword(ctx context.Context, userID int64, currentPassword, newPassword string) error
 }
 
@@ -63,7 +60,6 @@ type Server struct {
 	auth    Authenticator
 	members MemberStore
 	pinger  Pinger
-	mailer  *mailer.Mailer
 	logger  *slog.Logger
 	mux     *http.ServeMux
 	static  http.Handler
@@ -75,21 +71,16 @@ func New(
 	authenticator Authenticator,
 	members MemberStore,
 	pinger Pinger,
-	mailerClient *mailer.Mailer,
 	logger *slog.Logger,
 ) *Server {
 	if logger == nil {
 		logger = slog.Default()
-	}
-	if mailerClient == nil {
-		mailerClient = mailer.New(cfg.SMTP)
 	}
 	server := &Server{
 		cfg:     cfg,
 		auth:    authenticator,
 		members: members,
 		pinger:  pinger,
-		mailer:  mailerClient,
 		logger:  logger,
 		mux:     http.NewServeMux(),
 		now:     time.Now,
@@ -111,8 +102,6 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/auth/login", s.handleLogin)
 	s.mux.HandleFunc("POST /api/auth/logout", s.handleLogout)
 	s.mux.HandleFunc("GET /api/auth/session", s.handleSession)
-	s.mux.HandleFunc("POST /api/auth/password/forgot", s.handleForgotPassword)
-	s.mux.HandleFunc("POST /api/auth/password/reset", s.handleResetPassword)
 	s.mux.Handle("POST /api/auth/password/change", s.requireAuth(http.HandlerFunc(s.handleChangePassword)))
 
 	s.mux.Handle("GET /api/family-members", s.requireAuth(http.HandlerFunc(s.handleListMembers)))

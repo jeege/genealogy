@@ -10,18 +10,12 @@ services:
       API_PORT: "8080"
       DATABASE_URL: ${DATABASE_URL:?请配置 PostgreSQL 连接字符串 DATABASE_URL}
       APP_ORIGIN: ${SITE_URL:?请配置站点公开地址 SITE_URL}
-      PUBLIC_BASE_URL: ${SITE_URL:?请配置站点公开地址 SITE_URL}
       FAMILY_SURNAME: ${FAMILY_SURNAME:-刘}
       SESSION_TTL: ${SESSION_TTL:-720h}
       COOKIE_SECURE: ${COOKIE_SECURE:-auto}
       ALLOW_SIGNUP: ${ALLOW_SIGNUP:-false}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASS: ${SMTP_PASS:-}
-      SMTP_FROM: ${SMTP_FROM:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     depends_on:
       db:

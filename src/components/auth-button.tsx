@@ -23,7 +23,7 @@ export function AuthButton() {
   return user ? (
     <div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-4 w-full md:w-auto">
       <span className="text-sm font-medium truncate max-w-[200px] md:max-w-none mb-2 md:mb-0">
-        你好, {user.email}!
+        你好, {user.username}!
       </span>
       <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
         <Button asChild size="sm" variant={"outline"} className="w-full md:w-auto">

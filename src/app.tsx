@@ -4,8 +4,6 @@ import { FamilyTreeHeader } from "@/components/family-tree-header";
 import { LoginPage } from "@/pages/auth/login";
 import { SignUpPage } from "@/pages/auth/sign-up";
 import { SignUpSuccessPage } from "@/pages/auth/sign-up-success";
-import { ForgotPasswordPage } from "@/pages/auth/forgot-password";
-import { UpdatePasswordPage } from "@/pages/auth/update-password";
 import { ErrorPage } from "@/pages/auth/error";
 import { NotFoundPage } from "@/pages/not-found";
 
@@ -80,8 +78,6 @@ export function App() {
         <Route path="/auth/login" element={<LoginPage />} />
         <Route path="/auth/sign-up" element={<SignUpPage />} />
         <Route path="/auth/sign-up-success" element={<SignUpSuccessPage />} />
-        <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="/auth/update-password" element={<UpdatePasswordPage />} />
         <Route path="/auth/error" element={<ErrorPage />} />
 
         <Route path="/family-tree" element={<FamilyTreeLayout />}>

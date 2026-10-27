@@ -20,7 +20,7 @@ export function SignUpSuccessPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                您已成功注册，可以直接使用邮箱和密码登录。
+                您已成功注册，可以直接使用用户名和密码登录。
               </p>
               <Button asChild className="w-full">
                 <Link href="/auth/login">前往登录</Link>

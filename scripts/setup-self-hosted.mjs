@@ -22,9 +22,15 @@ export function validateSiteUrl(value) {
   return url.origin;
 }
 
-function validateEmail(value) {
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value ?? '')) throw new Error('管理员邮箱格式无效');
-  return value.trim().toLowerCase();
+// 用户名不限制字符集：中文、空格、符号、邮箱样式都允许；
+// 仅拒绝空、超长、控制字符，以及会破坏 dotenv/Compose 解析的字符。
+function validateUsername(value) {
+  const username = (value ?? '').trim();
+  if (!username) throw new Error('管理员用户名不能为空');
+  if (Buffer.byteLength(username) > 256) throw new Error('管理员用户名过长');
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(username)) throw new Error('管理员用户名不能包含控制字符');
+  return username;
 }
 
 function validatePassword(value) {
@@ -37,7 +43,7 @@ function validatePassword(value) {
 export async function writeConfiguration({
   siteUrl,
   surname = '刘',
-  adminEmail = '',
+  adminUsername = '',
   adminPassword = '',
   output = resolve('.env.self-hosted'),
 }) {
@@ -45,8 +51,8 @@ export async function writeConfiguration({
   if (!surname.trim() || /[\r\n"'\\$`]/.test(surname)) throw new Error('姓氏不能为空或包含换行、引号及变量符号');
 
   const secrets = generateSecrets();
-  const email = adminEmail ? validateEmail(adminEmail) : '';
-  const password = email
+  const username = adminUsername ? validateUsername(adminUsername) : '';
+  const password = username
     ? (adminPassword ? validatePassword(adminPassword) : validatePassword(secrets.adminPassword))
     : '';
   const databaseURL = `postgres://genealogy:${secrets.postgresPassword}@db:5432/genealogy?sslmode=disable`;
@@ -66,9 +72,8 @@ export async function writeConfiguration({
     COOKIE_SECURE: 'auto',
     // 单部署共享一份族谱；默认关闭公开注册，首账号由 ADMIN_* 引导创建。
     ALLOW_SIGNUP: 'false',
-    ADMIN_EMAIL: email,
+    ADMIN_USERNAME: username,
     ADMIN_PASSWORD: password,
-    SMTP_HOST: '', SMTP_PORT: '587', SMTP_USER: '', SMTP_PASS: '', SMTP_FROM: '',
     LOG_LEVEL: 'info',
   };
   const content = '# 自动生成；含数据库与初始管理员凭据。请离线备份，勿提交或公开。\n' +
@@ -83,13 +88,13 @@ export async function writeConfiguration({
 async function main() {
   const args = process.argv.slice(2);
   if (args.includes('--help')) {
-    console.log('用法：node scripts/setup-self-hosted.mjs --site-url http://localhost:3000 [--surname 刘] [--admin-email 邮箱] [--admin-password 密码]');
+    console.log('用法：node scripts/setup-self-hosted.mjs --site-url http://localhost:3000 [--surname 刘] [--admin-username 用户名] [--admin-password 密码]');
     return;
   }
   const options = {};
   const names = {
     '--site-url': 'siteUrl', '--surname': 'surname',
-    '--admin-email': 'adminEmail', '--admin-password': 'adminPassword',
+    '--admin-username': 'adminUsername', '--admin-password': 'adminPassword',
   };
   for (let i = 0; i < args.length; i += 2) {
     if (!names[args[i]] || !args[i + 1] || args[i + 1].startsWith('--')) throw new Error('参数错误，请使用 --help');

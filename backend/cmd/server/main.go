@@ -23,7 +23,6 @@ import (
 	"github.com/yunfengsa/pure-genealogy/backend/internal/config"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/database"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/domain"
-	"github.com/yunfengsa/pure-genealogy/backend/internal/mailer"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/store"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/web"
 )
@@ -59,8 +58,8 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, `用法：
   genealogy-server serve                启动 API 服务（默认）
   genealogy-server migrate              执行数据库迁移
-  genealogy-server user create --email <邮箱> [--password <密码>]
-  genealogy-server user set-password --email <邮箱> [--password <密码>]
+  genealogy-server user create --username <用户名> [--password <密码>]
+  genealogy-server user set-password --username <用户名> [--password <密码>]
   genealogy-server healthcheck          检查本机 /api/health
 
 密码优先从 ADMIN_PASSWORD 环境变量读取；也支持从标准输入读取一行。`)
@@ -122,15 +121,14 @@ func runServe() error {
 
 	repository := store.New(db.Pool)
 	authService := auth.NewService(
-		repository, repository, repository,
-		cfg.SessionTTL, cfg.PasswordResetTTL, cfg.BcryptCost, cfg.AllowSignup, logger,
+		repository, repository,
+		cfg.SessionTTL, cfg.BcryptCost, cfg.AllowSignup, logger,
 	)
 	if err := bootstrapAdmin(ctx, cfg, authService, logger); err != nil {
 		return err
 	}
 
-	mailerClient := mailer.New(cfg.SMTP)
-	httpAPI := api.New(cfg, authService, repository, db, mailerClient, logger)
+	httpAPI := api.New(cfg, authService, repository, db, logger)
 	staticFS, err := web.EmbeddedFS()
 	if err != nil {
 		return fmt.Errorf("加载内嵌前端失败：%w", err)
@@ -155,7 +153,6 @@ func runServe() error {
 			"host", cfg.Host,
 			"port", cfg.Port,
 			"allow_signup", cfg.AllowSignup,
-			"smtp_enabled", cfg.SMTP.Enabled(),
 		)
 		errCh <- server.ListenAndServe()
 	}()
@@ -175,13 +172,13 @@ func runServe() error {
 }
 
 func bootstrapAdmin(ctx context.Context, cfg config.Config, service *auth.Service, logger *slog.Logger) error {
-	if cfg.AdminEmail == "" {
+	if cfg.AdminUsername == "" {
 		count, err := service.CountUsers(ctx)
 		if err != nil {
 			return err
 		}
 		if count == 0 && !cfg.AllowSignup {
-			logger.Warn("当前没有任何账号且关闭了注册，请设置 ADMIN_EMAIL/ADMIN_PASSWORD 或执行 user create 命令")
+			logger.Warn("当前没有任何账号且关闭了注册，请设置 ADMIN_USERNAME/ADMIN_PASSWORD 或执行 user create 命令")
 		}
 		return nil
 	}
@@ -193,15 +190,15 @@ func bootstrapAdmin(ctx context.Context, cfg config.Config, service *auth.Servic
 		logger.Info("数据库已有账号，跳过初始管理员创建")
 		return nil
 	}
-	user, err := service.CreateUser(ctx, cfg.AdminEmail, cfg.AdminPassword)
+	user, err := service.CreateUser(ctx, cfg.AdminUsername, cfg.AdminPassword)
 	if err != nil {
-		if errors.Is(err, domain.ErrEmailTaken) {
+		if errors.Is(err, domain.ErrUsernameTaken) {
 			logger.Info("初始管理员已由其他实例创建")
 			return nil
 		}
 		return fmt.Errorf("创建初始管理员失败：%w", err)
 	}
-	logger.Info("已创建初始管理员账号", "email", user.Email)
+	logger.Info("已创建初始管理员账号", "username", user.Username)
 	return nil
 }
 
@@ -231,15 +228,15 @@ func runUser(args []string) error {
 		return fmt.Errorf("未知 user 子命令 %q", action)
 	}
 	flags := flag.NewFlagSet("user "+action, flag.ContinueOnError)
-	email := flags.String("email", "", "账号邮箱")
+	username := flags.String("username", "", "账号用户名（不限制字符，可用中文）")
 	password := flags.String("password", "", "账号密码（建议改用 ADMIN_PASSWORD 或标准输入）")
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
 	}
-	if *email == "" {
-		return fmt.Errorf("缺少 --email")
+	if *username == "" {
+		return fmt.Errorf("缺少 --username")
 	}
-	normalizedEmail, err := auth.NormalizeEmail(*email)
+	normalizedUsername, err := auth.NormalizeUsername(*username)
 	if err != nil {
 		return err
 	}
@@ -271,18 +268,18 @@ func runUser(args []string) error {
 
 	switch action {
 	case "create":
-		user, err := repository.CreateUser(context.Background(), normalizedEmail, hash)
+		user, err := repository.CreateUser(context.Background(), normalizedUsername, hash)
 		if err != nil {
-			if errors.Is(err, domain.ErrEmailTaken) {
-				return fmt.Errorf("邮箱 %s 已存在，如需修改密码请使用 user set-password", normalizedEmail)
+			if errors.Is(err, domain.ErrUsernameTaken) {
+				return fmt.Errorf("用户名 %s 已存在，如需修改密码请使用 user set-password", normalizedUsername)
 			}
 			return err
 		}
-		fmt.Printf("已创建账号：%s（ID %d）\n", user.Email, user.ID)
+		fmt.Printf("已创建账号：%s（ID %d）\n", user.Username, user.ID)
 	case "set-password":
-		user, err := repository.FindUserByEmail(context.Background(), normalizedEmail)
+		user, err := repository.FindUserByUsername(context.Background(), normalizedUsername)
 		if err != nil {
-			return fmt.Errorf("账号不存在：%s", normalizedEmail)
+			return fmt.Errorf("账号不存在：%s", normalizedUsername)
 		}
 		if err := repository.UpdatePassword(context.Background(), user.ID, hash); err != nil {
 			return err
@@ -290,7 +287,7 @@ func runUser(args []string) error {
 		if err := repository.DeleteUserSessions(context.Background(), user.ID); err != nil {
 			return err
 		}
-		fmt.Printf("已更新密码并撤销旧会话：%s\n", user.Email)
+		fmt.Printf("已更新密码并撤销旧会话：%s\n", user.Username)
 	default:
 		return fmt.Errorf("未知 user 子命令 %q", action)
 	}

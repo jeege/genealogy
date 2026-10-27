@@ -9,7 +9,7 @@
 
 - **前端**: React 19、Vite 6、React Router 7、TypeScript
 - **后端**: Go `net/http` + `pgx` + `go:embed`，位于 `backend/`
-- **数据库/认证**: PostgreSQL + 自建邮箱密码认证（HttpOnly 会话 Cookie）
+- **数据库/认证**: PostgreSQL + 自建用户名密码认证（HttpOnly 会话 Cookie）
 - **UI**: shadcn/ui (new-york) + Tailwind CSS + lucide-react
 - **可视化**: @xyflow/react、react-force-graph-3d、recharts
 - **主题**: next-themes 明暗模式

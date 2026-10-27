@@ -5,19 +5,20 @@ import (
 	"testing"
 )
 
-func TestNormalizeEmail(t *testing.T) {
-	for _, input := range []string{" User@Example.COM ", "a.b+tag@example.com"} {
-		normalized, err := NormalizeEmail(input)
+func TestNormalizeUsername(t *testing.T) {
+	// 用户名不限制字符集：中文、空格、符号、邮箱样式都允许，仅做去空白与小写。
+	for _, input := range []string{" User@Example.COM ", "张三", "李 四", "王五/六", "a.b+tag"} {
+		normalized, err := NormalizeUsername(input)
 		if err != nil {
-			t.Fatalf("NormalizeEmail(%q) 返回错误：%v", input, err)
+			t.Fatalf("NormalizeUsername(%q) 返回错误：%v", input, err)
 		}
 		if normalized != strings.ToLower(strings.TrimSpace(input)) {
-			t.Fatalf("NormalizeEmail(%q) = %q", input, normalized)
+			t.Fatalf("NormalizeUsername(%q) = %q", input, normalized)
 		}
 	}
-	for _, input := range []string{"", "not-an-email", "Name <a@example.com>", "a b@example.com", "a@example.com\nBcc: x@y.z"} {
-		if _, err := NormalizeEmail(input); err == nil {
-			t.Fatalf("NormalizeEmail(%q) 应返回错误", input)
+	for _, input := range []string{"", "   ", strings.Repeat("a", MaxUsernameBytes+1), "bad\x00name", "line\nbreak"} {
+		if _, err := NormalizeUsername(input); err == nil {
+			t.Fatalf("NormalizeUsername(%q) 应返回错误", input)
 		}
 	}
 }

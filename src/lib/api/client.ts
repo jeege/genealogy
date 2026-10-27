@@ -41,18 +41,18 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   return payload as T;
 }
 
-export async function login(email: string, password: string): Promise<AuthUser> {
+export async function login(username: string, password: string): Promise<AuthUser> {
   const payload = await apiRequest<{ user: AuthUser }>("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ username, password }),
   });
   return payload.user;
 }
 
-export async function signup(email: string, password: string): Promise<AuthUser> {
+export async function signup(username: string, password: string): Promise<AuthUser> {
   const payload = await apiRequest<{ user: AuthUser }>("/auth/signup", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ username, password }),
   });
   return payload.user;
 }
@@ -68,20 +68,6 @@ export async function getSession(): Promise<AuthUser | null> {
   } catch {
     return null;
   }
-}
-
-export async function forgotPassword(email: string): Promise<void> {
-  await apiRequest<{ message: string }>("/auth/password/forgot", {
-    method: "POST",
-    body: JSON.stringify({ email }),
-  });
-}
-
-export async function resetPassword(token: string, password: string): Promise<void> {
-  await apiRequest<null>("/auth/password/reset", {
-    method: "POST",
-    body: JSON.stringify({ token, password }),
-  });
 }
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {

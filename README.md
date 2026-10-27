@@ -11,7 +11,7 @@
 ## ✨ 项目亮点
 
 - **单一二进制**: 前端是纯 React SPA，构建后通过 `go:embed` 嵌入 Go，产物就是一个可执行文件。
-- **自有认证**: 邮箱 + 密码登录，bcrypt 密码散列，数据库只保存随机会话令牌的散列，不依赖 Supabase Auth。
+- **自有认证**: 用户名 + 密码登录（用户名不限制字符，中文亦可），bcrypt 密码散列，数据库只保存随机会话令牌的散列，不依赖 Supabase Auth。
 - **直连 PostgreSQL**: 只需配置 `DATABASE_URL` 连接字符串；启动时自动执行内嵌迁移。
 - **深度中文化**: UI 文案、日期格式、元数据及字辈统计均针对中文语境定制。
 - **多维可视化 (v2.0)**:
@@ -30,7 +30,7 @@
 - **前端**: React 19 + [Vite](https://vite.dev/) + [React Router](https://reactrouter.com/)，TypeScript（无 SSR、无服务端运行时）
 - **后端**: Go 1.24（标准库 `net/http`、[pgx](https://github.com/jackc/pgx)、`go:embed`）
 - **数据库**: PostgreSQL 17（可连接任意兼容 PostgreSQL 的托管数据库）
-- **认证**: 自建邮箱密码认证 + HttpOnly 服务端会话 Cookie
+- **认证**: 自建用户名密码认证 + HttpOnly 服务端会话 Cookie
 - **UI**: shadcn/ui、Tailwind CSS、Lucide React
 - **可视化**: `@xyflow/react`、`react-force-graph-3d`、`recharts`
 - **富文本**: Slate.js
@@ -91,7 +91,6 @@ DATABASE_URL=postgres://genealogy:change-me@127.0.0.1:5432/genealogy?sslmode=dis
 API_PORT=8080
 DEV_API_PROXY_TARGET=http://127.0.0.1:8080
 APP_ORIGIN=http://localhost:3000,http://127.0.0.1:3000
-PUBLIC_BASE_URL=http://localhost:3000
 FAMILY_SURNAME=刘
 ALLOW_SIGNUP=true
 ```
@@ -113,12 +112,12 @@ npm run dev
 首次使用可以：
 
 - 在 `/auth/sign-up` 注册第一个账号（`ALLOW_SIGNUP=true` 时）；或
-- 启动 Go 前设置 `ADMIN_EMAIL` / `ADMIN_PASSWORD`，由后端自动创建初始管理员；或
+- 启动 Go 前设置 `ADMIN_USERNAME` / `ADMIN_PASSWORD`，由后端自动创建初始管理员；或
 - 使用 CLI 创建账号：
 
 ```bash
 cd backend
-ADMIN_PASSWORD='your-password' go run ./cmd/server user create --email you@example.com
+ADMIN_PASSWORD='your-password' go run ./cmd/server user create --username 管理员
 ```
 
 ## 📦 构建单一二进制
@@ -142,7 +141,7 @@ ALLOW_SIGNUP=true \
 
 ```bash
 ./pure-genealogy migrate               # 只执行迁移
-./pure-genealogy user create --email you@example.com
+./pure-genealogy user create --username 管理员
 ./pure-genealogy healthcheck           # 查看 /api/health
 ```
 
@@ -177,7 +176,7 @@ curl -b cookies.txt -H 'Content-Type: text/plain' \
 ```bash
 node scripts/setup-self-hosted.mjs \
   --site-url http://localhost:3000 \
-  --admin-email you@example.com
+  --admin-username 管理员
 ```
 
 脚本生成权限为 `0600` 的 `.env.self-hosted`，并打印一次性初始管理员密码。然后：
@@ -195,10 +194,9 @@ Compose 启动 PostgreSQL 与应用容器；应用容器内只有一个 Go 进�
 docker run -d --name pure-genealogy -p 3000:8080 \
   -e DATABASE_URL='postgres://user:pass@db.example.com:5432/genealogy?sslmode=require' \
   -e APP_ORIGIN='https://genealogy.example.com' \
-  -e PUBLIC_BASE_URL='https://genealogy.example.com' \
   -e FAMILY_SURNAME='刘' \
   -e ALLOW_SIGNUP=false \
-  -e ADMIN_EMAIL='you@example.com' \
+  -e ADMIN_USERNAME='管理员' \
   -e ADMIN_PASSWORD='change-me-please' \
   ghcr.io/jeege/genealogy:latest
 ```
@@ -207,7 +205,7 @@ docker run -d --name pure-genealogy -p 3000:8080 \
 GitHub Actions 自动构建 `linux/amd64`/`linux/arm64` 双架构镜像，也可在 Actions
 页面手动触发。
 
-HTTPS、SMTP、备份恢复、从 Supabase 迁移等完整说明见
+HTTPS、备份恢复、从 Supabase 迁移等完整说明见
 **[Docker 部署文档](docs/docker-deployment.md)**。
 
 ## 🗄️ 从 Supabase 迁移
@@ -230,7 +228,7 @@ HTTPS、SMTP、备份恢复、从 Supabase 迁移等完整说明见
 │   └── internal/
 │       ├── api/            # 路由、中间件、页面鉴权
 │       ├── web/            # go:embed 静态资源与文件服务
-│       ├── auth/ store/ family/ database/ mailer/ config/
+│       ├── auth/ store/ family/ database/ config/
 │       └── web/dist/       # 构建时复制进来的静态页面（不提交）
 ├── src/components/         # React 组件
 ├── src/lib/api/            # API 客户端与共享类型

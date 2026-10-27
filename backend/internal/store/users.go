@@ -12,30 +12,30 @@ func (s *Store) CountUsers(ctx context.Context) (int64, error) {
 	return count, err
 }
 
-func (s *Store) CreateUser(ctx context.Context, email, passwordHash string) (domain.User, error) {
+func (s *Store) CreateUser(ctx context.Context, username, passwordHash string) (domain.User, error) {
 	var user domain.User
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO public.users (email, password_hash)
+		INSERT INTO public.users (username, password_hash)
 		VALUES ($1, $2)
-		RETURNING id, email, password_hash, created_at, updated_at`,
-		email, passwordHash,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.CreatedAt, &user.UpdatedAt)
+		RETURNING id, username, password_hash, created_at, updated_at`,
+		username, passwordHash,
+	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		if pgErrorCode(err) == "23505" {
-			return domain.User{}, domain.ErrEmailTaken
+			return domain.User{}, domain.ErrUsernameTaken
 		}
 		return domain.User{}, err
 	}
 	return user, nil
 }
 
-func (s *Store) FindUserByEmail(ctx context.Context, email string) (domain.User, error) {
+func (s *Store) FindUserByUsername(ctx context.Context, username string) (domain.User, error) {
 	var user domain.User
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, email, password_hash, created_at, updated_at
+		SELECT id, username, password_hash, created_at, updated_at
 		FROM public.users
-		WHERE lower(email) = lower($1)`, email,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.CreatedAt, &user.UpdatedAt)
+		WHERE lower(username) = lower($1)`, username,
+	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		return domain.User{}, normalizeNotFound(err)
 	}
@@ -45,10 +45,10 @@ func (s *Store) FindUserByEmail(ctx context.Context, email string) (domain.User,
 func (s *Store) FindUserByID(ctx context.Context, id int64) (domain.User, error) {
 	var user domain.User
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, email, password_hash, created_at, updated_at
+		SELECT id, username, password_hash, created_at, updated_at
 		FROM public.users
 		WHERE id = $1`, id,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		return domain.User{}, normalizeNotFound(err)
 	}
