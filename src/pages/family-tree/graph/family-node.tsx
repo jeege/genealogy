@@ -12,7 +12,13 @@ export interface FamilyNodeData extends FamilyMemberNode {
   hasChildren?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: (id: number) => void;
-  branchColor?: string; 
+  branchColor?: string;
+  /** 与主成员合并渲染的配偶；有值时节点展示为夫妻双栏。 */
+  partner?: FamilyMemberNode | null;
+  /** 节点渲染宽度，用于夫妻双栏排布。 */
+  nodeWidth?: number;
+  /** 点击配偶面板时回调（由父组件切换到该成员的详情）。 */
+  onPartnerClick?: (member: FamilyMemberNode) => void;
   [key: string]: unknown;
 }
 
@@ -20,8 +26,115 @@ export interface FamilyNodeProps {
   data: FamilyNodeData;
 }
 
+/** 性别/在世状态对应的边框与横条颜色。 */
+function borderClass(member: FamilyMemberNode): string {
+  if (member.gender === "男") {
+    return member.is_alive
+      ? "border-blue-400 dark:border-blue-500"
+      : "border-blue-300/40 dark:border-blue-900/40";
+  }
+  if (member.gender === "女") {
+    return member.is_alive
+      ? "border-pink-400 dark:border-pink-500"
+      : "border-pink-300/40 dark:border-pink-900/40";
+  }
+  return "border-border";
+}
+
+function barClass(member: FamilyMemberNode): string {
+  if (member.gender === "男") {
+    return member.is_alive ? "bg-blue-400 dark:bg-blue-500" : "bg-blue-300/40";
+  }
+  if (member.gender === "女") {
+    return member.is_alive ? "bg-pink-400 dark:bg-pink-500" : "bg-pink-300/40";
+  }
+  return "bg-border";
+}
+
+function genderTextClass(member: FamilyMemberNode): string {
+  if (member.gender === "男") {
+    return member.is_alive ? "text-blue-600 dark:text-blue-400" : "text-blue-800/60 dark:text-blue-300/50";
+  }
+  return member.is_alive ? "text-pink-600 dark:text-pink-400" : "text-pink-800/60 dark:text-pink-300/50";
+}
+
+/** 单个成员的纵向信息块（姓名、世代、排行、性别、状态）。 */
+function MemberBlock({
+  member,
+  compact,
+  onSelect,
+}: {
+  member: FamilyMemberNode;
+  compact?: boolean;
+  onSelect?: () => void;
+}) {
+  const clickable = Boolean(onSelect);
+  return (
+    <div
+      className={cn(
+        "flex flex-col items-center gap-1.5 w-full min-w-0",
+        clickable && "cursor-pointer rounded-md hover:bg-accent/40 transition-colors",
+        compact ? "px-1 py-0.5" : "px-2",
+      )}
+      onClick={
+        clickable
+          ? (event) => {
+              // 阻止冒泡，避免同时触发整个合并节点的点击。
+              event.stopPropagation();
+              onSelect?.();
+            }
+          : undefined
+      }
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={
+        clickable
+          ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                event.stopPropagation();
+                onSelect?.();
+              }
+            }
+          : undefined
+      }
+      title={member.name}
+    >
+      <div
+        className={cn(
+          "font-semibold text-center truncate w-full",
+          compact ? "text-sm" : "text-base",
+          !member.is_alive && "text-foreground/80",
+        )}
+      >
+        {member.name}
+      </div>
+      <div className="flex items-center gap-1 flex-wrap justify-center">
+        {member.generation !== null && (
+          <Badge
+            variant={member.is_alive ? "secondary" : "outline"}
+            className={cn("text-[10px] px-1.5 py-0", !member.is_alive && "opacity-80")}
+          >
+            第{member.generation}世
+          </Badge>
+        )}
+        {member.sibling_order !== null && (
+          <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", !member.is_alive && "opacity-80")}>
+            排行{member.sibling_order}
+          </Badge>
+        )}
+      </div>
+      {member.gender && (
+        <span className={cn("text-xs", genderTextClass(member))}>{member.gender}</span>
+      )}
+      {!member.is_alive && <span className="text-xs text-muted-foreground/80 italic">已故</span>}
+    </div>
+  );
+}
+
 function FamilyMemberNodeComponent({ data }: FamilyNodeProps) {
-  const nodeData = data;
+  const nodeData = data as FamilyNodeData;
+  const partner = nodeData.partner ?? null;
   // 结构化配偶优先（可能多位），无关联成员时回退到文本备注。
   const spouseLabel =
     nodeData.spouses && nodeData.spouses.length > 0
@@ -35,59 +148,60 @@ function FamilyMemberNodeComponent({ data }: FamilyNodeProps) {
     }
   };
 
+  const handlePartnerClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (partner && nodeData.onPartnerClick) {
+      nodeData.onPartnerClick(partner);
+    }
+  };
+
   return (
     <div
       className={cn(
-        "px-4 py-3 rounded-lg border-2 text-card-foreground shadow-md min-w-[140px] transition-all duration-300 relative group",
+        "px-3 py-3 rounded-lg border-2 text-card-foreground shadow-md transition-all duration-300 relative group",
+        !partner && "min-w-[140px]",
         // 变暗模式 (当有高亮发生，但此节点不在路径上)
         nodeData.isDimmed && "opacity-30 grayscale scale-95 blur-[0.5px]",
-        
+
         // 背景色
         nodeData.is_alive ? "bg-card" : "bg-muted/50",
-        
+
         // 边框颜色逻辑
         // 1. 当前选中高亮 -> 黄色光环 (最强)
-        nodeData.isHighlighted 
+        nodeData.isHighlighted
           ? "border-amber-500 ring-4 ring-amber-400/50 scale-110 z-50"
           // 2. 路径高亮 -> 金色边框 (次强)
           : nodeData.isPathHighlighted
             ? "border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.4)] z-10"
             // 3. 常规边框 -> 按性别/状态
-            : nodeData.gender === "男" 
-              ? (nodeData.is_alive ? "border-blue-400 dark:border-blue-500" : "border-blue-300/40 dark:border-blue-900/40")
-              : nodeData.gender === "女" 
-                ? (nodeData.is_alive ? "border-pink-400 dark:border-pink-500" : "border-pink-300/40 dark:border-pink-900/40")
-                : "border-border",
-                
+            : borderClass(nodeData),
+
         // 折叠时的强化样式 (仅在非变暗状态下显示)
         !nodeData.isDimmed && nodeData.collapsed && "border-primary shadow-lg",
-        
+
         // 已故样式
         !nodeData.is_alive && !nodeData.isDimmed && "opacity-80 grayscale-[0.2]",
-        
+
         // 悬浮提升感
         "hover:shadow-xl hover:-translate-y-0.5 transition-transform duration-300",
-        
+
         // 折叠时的堆叠效果
         nodeData.collapsed && [
           "before:absolute before:inset-0 before:translate-x-1 before:translate-y-1 before:border-2 before:border-muted-foreground/20 before:rounded-lg before:-z-10",
-          "after:absolute after:inset-0 after:translate-x-2 after:translate-y-2 after:border-2 after:border-muted-foreground/10 after:rounded-lg after:-z-20"
+          "after:absolute after:inset-0 after:translate-x-2 after:translate-y-2 after:border-2 after:border-muted-foreground/10 after:rounded-lg after:-z-20",
         ]
       )}
+      style={nodeData.nodeWidth ? { width: nodeData.nodeWidth } : undefined}
     >
       {/* 顶部颜色横条 - 增加圆角以适配移除 overflow-hidden 后的容器 */}
-      <div 
+      <div
         className={cn(
           "absolute top-0 inset-x-0 h-1 rounded-t-[inherit]",
-          nodeData.isHighlighted 
+          nodeData.isHighlighted
             ? "bg-amber-500"
             : nodeData.isPathHighlighted
               ? "bg-amber-400"
-              : nodeData.gender === "男" 
-                ? (nodeData.is_alive ? "bg-blue-400 dark:bg-blue-500" : "bg-blue-300/40")
-                : nodeData.gender === "女" 
-                  ? (nodeData.is_alive ? "bg-pink-400 dark:bg-pink-500" : "bg-pink-300/40")
-                  : "bg-border"
+              : barClass(nodeData),
         )}
       />
 
@@ -97,58 +211,86 @@ function FamilyMemberNodeComponent({ data }: FamilyNodeProps) {
         position={Position.Top}
         className="!w-3 !h-3 !bg-primary !border-2 !border-background"
       />
-      
-      {/* 节点内容 */}
-      <div className="flex flex-col items-center gap-1.5 mb-1 w-full">
-        <div className={cn(
-          "font-semibold text-base text-center truncate w-full px-2",
-          !nodeData.is_alive && "text-foreground/80"
-        )} title={nodeData.name}>
-          {nodeData.name}
-        </div>
-        
-        {/* 配偶信息 - 新增 */}
-        {spouseLabel && (
-          <div className="flex items-center justify-center gap-0.5 w-full -mt-0.5 mb-0.5">
-            <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap select-none">配:</span>
-            <span
-              className="text-xs text-muted-foreground font-medium truncate max-w-[80%] text-center"
-              title={spouseLabel}
-            >
-              {spouseLabel}
-            </span>
-          </div>
-        )}
 
-        <div className="flex items-center gap-1.5 flex-wrap justify-center">
-          {nodeData.generation !== null && (
-            <Badge variant={nodeData.is_alive ? "secondary" : "outline"} className={cn("text-xs", !nodeData.is_alive && "opacity-80")}>
-              第{nodeData.generation}世
-            </Badge>
-          )}
-          {nodeData.sibling_order !== null && (
-            <Badge variant="outline" className={cn("text-xs", !nodeData.is_alive && "opacity-80")}>
-              排行{nodeData.sibling_order}
-            </Badge>
-          )}
+      {/* 节点内容：有配偶时并排展示，无配偶时单栏 */}
+      {partner ? (
+        <div className="flex items-stretch gap-0 w-full">
+          <div className="flex-1 min-w-0">
+            <MemberBlock member={nodeData} />
+          </div>
+          {/* 夫妻连接符：细分隔线 + 单字标记，避免竖排两字显得拥挤 */}
+          <div className="flex flex-col items-center justify-center px-1.5 select-none">
+            <span
+              aria-hidden
+              className="w-px flex-1 bg-border"
+            />
+            <span className="my-1 text-[10px] text-muted-foreground/70 leading-none">配</span>
+            <span
+              aria-hidden
+              className="w-px flex-1 bg-border"
+            />
+          </div>
+          <div className="flex-1 min-w-0">
+            <MemberBlock
+              member={partner}
+              compact
+              onSelect={
+                nodeData.onPartnerClick
+                  ? () => nodeData.onPartnerClick!(partner)
+                  : undefined
+              }
+            />
+          </div>
         </div>
-        
-        {nodeData.gender && (
-          <span className={cn(
-            "text-xs",
-            nodeData.gender === "男" 
-              ? (nodeData.is_alive ? "text-blue-600 dark:text-blue-400" : "text-blue-800/60 dark:text-blue-300/50") 
-              : (nodeData.is_alive ? "text-pink-600 dark:text-pink-400" : "text-pink-800/60 dark:text-pink-300/50")
-          )}>
-            {nodeData.gender}
-          </span>
-        )}
-        
-        {!nodeData.is_alive && (
-          <span className="text-xs text-muted-foreground/80 italic">已故</span>
-        )}
-      </div>
-      
+      ) : (
+        <div className="flex flex-col items-center gap-1.5 mb-1 w-full">
+          <div
+            className={cn(
+              "font-semibold text-base text-center truncate w-full px-2",
+              !nodeData.is_alive && "text-foreground/80",
+            )}
+            title={nodeData.name}
+          >
+            {nodeData.name}
+          </div>
+
+          {/* 配偶备注：只在没有可合并配偶时作为文本展示 */}
+          {spouseLabel && (
+            <div className="flex items-center justify-center gap-0.5 w-full -mt-0.5 mb-0.5">
+              <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap select-none">配:</span>
+              <span
+                className="text-xs text-muted-foreground font-medium truncate max-w-[80%] text-center"
+                title={spouseLabel}
+              >
+                {spouseLabel}
+              </span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-1.5 flex-wrap justify-center">
+            {nodeData.generation !== null && (
+              <Badge
+                variant={nodeData.is_alive ? "secondary" : "outline"}
+                className={cn("text-xs", !nodeData.is_alive && "opacity-80")}
+              >
+                第{nodeData.generation}世
+              </Badge>
+            )}
+            {nodeData.sibling_order !== null && (
+              <Badge variant="outline" className={cn("text-xs", !nodeData.is_alive && "opacity-80")}>
+                排行{nodeData.sibling_order}
+              </Badge>
+            )}
+          </div>
+
+          {nodeData.gender && (
+            <span className={cn("text-xs", genderTextClass(nodeData))}>{nodeData.gender}</span>
+          )}
+
+          {!nodeData.is_alive && <span className="text-xs text-muted-foreground/80 italic">已故</span>}
+        </div>
+      )}
+
       {/* 底部连接点 - 仅当有子女时显示 */}
       {nodeData.hasChildren && (
         <Handle
@@ -157,7 +299,7 @@ function FamilyMemberNodeComponent({ data }: FamilyNodeProps) {
           isConnectable={false}
           className={cn(
             "!w-3 !h-3 !bg-primary !border-2 !border-background",
-            nodeData.collapsed && "opacity-0" // 折叠时隐藏连接点
+            nodeData.collapsed && "opacity-0",
           )}
         />
       )}
@@ -168,17 +310,13 @@ function FamilyMemberNodeComponent({ data }: FamilyNodeProps) {
           onClick={handleToggle}
           className={cn(
             "absolute -bottom-3 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full border shadow-md flex items-center justify-center z-[60] transition-all duration-200 cursor-pointer",
-            "hover:scale-125 active:scale-90", // 明显的缩放反馈
-            nodeData.collapsed 
-              ? "bg-primary border-primary text-primary-foreground hover:bg-primary/90" 
-              : "bg-background border-border hover:bg-muted"
+            "hover:scale-125 active:scale-90",
+            nodeData.collapsed
+              ? "bg-primary border-primary text-primary-foreground hover:bg-primary/90"
+              : "bg-background border-border hover:bg-muted",
           )}
         >
-          {nodeData.collapsed ? (
-            <ChevronDown className="w-4 h-4" />
-          ) : (
-            <ChevronUp className="w-4 h-4" />
-          )}
+          {nodeData.collapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
         </button>
       )}
     </div>

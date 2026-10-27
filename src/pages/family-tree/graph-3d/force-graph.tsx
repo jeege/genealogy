@@ -1,6 +1,6 @@
 import { Suspense, lazy, useRef, useState, useMemo, useCallback, useEffect } from "react";
 import { FamilyMemberNode } from "../graph/actions";
-import { getFamilyLinks } from "../graph/family-links";
+import { getFamilyLinks, getSpouseLinks } from "../graph/family-links";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -109,9 +109,11 @@ export function FamilyForceGraph({ data }: ForceGraphProps) {
       group: member.generation || 0,
     }));
 
-    const links = getFamilyLinks(data);
+    // 父子连线用实线，配偶连线用虚线并拉近，避免配偶成为孤立的漂浮节点。
+    const parentLinks = getFamilyLinks(data).map((link) => ({ ...link, kind: "parent" as const }));
+    const spouseLinks = getSpouseLinks(data).map((link) => ({ ...link, kind: "spouse" as const }));
 
-    return { nodes, links };
+    return { nodes, links: [...parentLinks, ...spouseLinks] };
   }, [data]);
 
   // Tour Logic
@@ -332,9 +334,12 @@ export function FamilyForceGraph({ data }: ForceGraphProps) {
         nodeLabel="name"
         nodeAutoColorBy="generation" // 按代数着色
         nodeRelSize={6}
-        linkOpacity={0.3}
-        linkColor={() => linkColor}
-        linkDirectionalParticles={2} // 粒子效果指示方向
+        linkOpacity={0.35}
+        // 父子连线用主题文字色，配偶连线用琥珀色虚线以示区分。
+        linkColor={(link: any) => (link?.kind === "spouse" ? "rgba(245,158,11,0.55)" : linkColor)}
+        linkWidth={(link: any) => (link?.kind === "spouse" ? 1.5 : 1)}
+        // 配偶之间用较短的力距，视觉上贴在一起。
+        linkDirectionalParticles={(link: any) => (link?.kind === "spouse" ? 0 : 2)}
         linkDirectionalParticleWidth={2}
         
         // 节点文字渲染
