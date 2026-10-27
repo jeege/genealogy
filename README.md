@@ -1,16 +1,16 @@
 # pure-genealogy 族谱管理系统
 
 <p align="center">
-  <img alt="pure-genealogy Tree" src="app/demo.gif" width="800">
+  <img alt="pure-genealogy Tree" src="docs/demo.gif" width="800">
 </p>
 
 <p align="center">
-  一个基于 Next.js 16、Go 与 PostgreSQL 构建的现代化、全中文家族族谱管理系统。
+  一个基于 React + Vite、Go 与 PostgreSQL 构建的现代化、全中文家族族谱管理系统。
 </p>
 
 ## ✨ 项目亮点
 
-- **单一二进制**: 前端静态导出后通过 `go:embed` 嵌入 Go，构建产物就是一个可执行文件。
+- **单一二进制**: 前端是纯 React SPA，构建后通过 `go:embed` 嵌入 Go，产物就是一个可执行文件。
 - **自有认证**: 邮箱 + 密码登录，bcrypt 密码散列，数据库只保存随机会话令牌的散列，不依赖 Supabase Auth。
 - **直连 PostgreSQL**: 只需配置 `DATABASE_URL` 连接字符串；启动时自动执行内嵌迁移。
 - **深度中文化**: UI 文案、日期格式、元数据及字辈统计均针对中文语境定制。
@@ -26,7 +26,7 @@
 
 ## 🛠️ 技术栈
 
-- **前端**: [Next.js 16](https://nextjs.org/)（App Router、静态导出）、React 19、TypeScript
+- **前端**: React 19 + [Vite](https://vite.dev/) + [React Router](https://reactrouter.com/)，TypeScript（无 SSR、无服务端运行时）
 - **后端**: Go 1.24（标准库 `net/http`、[pgx](https://github.com/jackc/pgx)、`go:embed`）
 - **数据库**: PostgreSQL 17（可连接任意兼容 PostgreSQL 的托管数据库）
 - **认证**: 自建邮箱密码认证 + HttpOnly 服务端会话 Cookie
@@ -41,7 +41,7 @@
   │ 同源请求
   ▼
 Go 单一二进制 (默认 :8080)
-  ├─ /_next/static/*、/images/*     ← go:embed 的前端静态资源
+  ├─ /assets/*、/images/*     ← go:embed 的前端静态资源
   ├─ /、/family-tree/*              ← 校验会话后再返回 HTML
   └─ /api/*                         ← 认证、成员、导入、统计
                                        │
@@ -49,9 +49,10 @@ Go 单一二进制 (默认 :8080)
                               PostgreSQL (DATABASE_URL)
 ```
 
-- 前端 `next build` 输出 `out/`，由 `scripts/copy-web.mjs` 复制到
+- 前端 `vite build` 输出 `dist/`，由 `scripts/copy-web.mjs` 复制到
   `backend/internal/web/dist/`，再通过 `//go:embed` 打进二进制。
-- 浏览器与后端同源，认证 Cookie 直接生效，不需要反向代理或 Next.js 服务端。
+- 纯客户端渲染：Go 返回同一个 `index.html`，由 React Router 处理所有页面路径。
+- 浏览器与后端同源，认证 Cookie 直接生效，不需要反向代理或 Node 服务端。
 - 数据库连接串、会话散列与管理员口令只存在于 Go 进程。
 
 ## 🚀 本地开发
@@ -88,7 +89,7 @@ Go 启动时会自动创建 `users`、`sessions`、`password_reset_tokens`、
 DATABASE_URL=postgres://genealogy:change-me@127.0.0.1:5432/genealogy?sslmode=disable
 API_PORT=8080
 DEV_API_PROXY_TARGET=http://127.0.0.1:8080
-APP_ORIGIN=http://localhost:3000
+APP_ORIGIN=http://localhost:3000,http://127.0.0.1:3000
 PUBLIC_BASE_URL=http://localhost:3000
 FAMILY_SURNAME=刘
 ALLOW_SIGNUP=true
@@ -104,7 +105,7 @@ ALLOW_SIGNUP=true
 # 终端 1：Go API（127.0.0.1:8080）
 npm run dev:api
 
-# 终端 2：Next.js 开发服务器（localhost:3000，/api 自动代理到 Go）
+# 终端 2：Vite 开发服务器（localhost:3000，/api 自动代理到 Go）
 npm run dev
 ```
 
@@ -122,7 +123,7 @@ ADMIN_PASSWORD='your-password' go run ./cmd/server user create --email you@examp
 ## 📦 构建单一二进制
 
 ```bash
-npm run build          # 静态导出并复制到 backend/internal/web/dist
+npm run build          # 类型检查 + vite build，并复制到 backend/internal/web/dist
 npm run build:binary   # 在前者基础上执行 go build，产出 ./pure-genealogy
 ```
 
@@ -219,9 +220,10 @@ HTTPS、SMTP、备份恢复、从 Supabase 迁移等完整说明见
 
 ```text
 /
-├── app/                    # Next.js App Router（静态导出）
-│   ├── auth/               # 登录、注册、找回密码
-│   └── family-tree/        # 成员管理、配偶关系、2D/3D 图、统计、时间轴、生平册
+├── src/                    # 纯 React 前端
+│   ├── app.tsx             # React Router 路由表与页面外壳
+│   ├── pages/auth/         # 登录、注册、找回密码
+│   └── pages/family-tree/  # 成员管理、配偶关系、2D/3D 图、统计、时间轴、生平册
 ├── backend/                # Go 后端（二进制入口与全部服务）
 │   ├── cmd/server/         # serve / migrate / user / healthcheck
 │   └── internal/
@@ -229,8 +231,8 @@ HTTPS、SMTP、备份恢复、从 Supabase 迁移等完整说明见
 │       ├── web/            # go:embed 静态资源与文件服务
 │       ├── auth/ store/ family/ database/ mailer/ config/
 │       └── web/dist/       # 构建时复制进来的静态页面（不提交）
-├── components/             # React 组件
-├── lib/api/                # 浏览器 API 客户端与共享类型
+├── src/components/         # React 组件
+├── src/lib/api/            # API 客户端与共享类型
 ├── scripts/                # 静态复制、本地启动、配置生成、镜像发布
 └── tests/                  # Node 测试；Go 测试位于 backend/internal
 ```
@@ -242,7 +244,7 @@ npm test          # Node 测试 + Go 测试
 npm run test:web  # 仅 Node 测试
 npm run test:go   # 仅 Go 测试
 npx tsc --noEmit  # TypeScript 类型检查
-npm run build     # 静态导出并复制到 Go
+npm run build     # 类型检查 + Vite 构建并复制到 Go
 ```
 
 Go 测试覆盖配置校验、密码与会话、导入解析、统计、HTTP/页面鉴权与静态文件服务。

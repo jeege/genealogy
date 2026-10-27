@@ -28,11 +28,13 @@ func (c SMTPConfig) Enabled() bool { return c.Host != "" }
 
 // Config 是 API 服务的全部运行时配置。
 type Config struct {
-	DatabaseURL      string
-	FamilySurname    string
-	Host             string
-	Port             int
-	AppOrigin        string
+	DatabaseURL   string
+	FamilySurname string
+	Host          string
+	Port          int
+	AppOrigin     string
+	// AppOrigins 是允许的浏览器来源集合，来自 APP_ORIGIN 的逗号分隔列表。
+	AppOrigins       []string
 	PublicBaseURL    string
 	SessionTTL       time.Duration
 	PasswordResetTTL time.Duration
@@ -110,11 +112,19 @@ func LoadFrom(environ []string) (Config, error) {
 	}
 
 	if raw := e.get("APP_ORIGIN"); raw != "" {
-		origin, err := normalizeOrigin(raw, "APP_ORIGIN")
-		if err != nil {
-			return Config{}, err
+		for _, item := range strings.Split(raw, ",") {
+			if strings.TrimSpace(item) == "" {
+				continue
+			}
+			origin, err := normalizeOrigin(item, "APP_ORIGIN")
+			if err != nil {
+				return Config{}, err
+			}
+			if cfg.AppOrigin == "" {
+				cfg.AppOrigin = origin
+			}
+			cfg.AppOrigins = append(cfg.AppOrigins, origin)
 		}
-		cfg.AppOrigin = origin
 	}
 	cfg.PublicBaseURL = cfg.AppOrigin
 	if raw := e.get("PUBLIC_BASE_URL"); raw != "" {

@@ -2,12 +2,12 @@
 
 ## 项目概述
 
-基于 **Next.js 16 (App Router, 静态导出)** + **Go 1.24 + PostgreSQL** 的家族族谱管理应用，
-前端使用 TypeScript，后端不再依赖 Supabase。
+基于 **React 19 + Vite** + **Go 1.24 + PostgreSQL** 的家族族谱管理应用。
+前端是纯客户端 SPA（React Router 7），没有 SSR 或 Node 服务端。
 
 ## 技术栈
 
-- **前端**: Next.js 16（`output: "export"`）、React 19、TypeScript
+- **前端**: React 19、Vite 6、React Router 7、TypeScript
 - **后端**: Go `net/http` + `pgx` + `go:embed`，位于 `backend/`
 - **数据库/认证**: PostgreSQL + 自建邮箱密码认证（HttpOnly 会话 Cookie）
 - **UI**: shadcn/ui (new-york) + Tailwind CSS + lucide-react
@@ -16,8 +16,8 @@
 
 ## 静态前端规范（必读）
 
-前端没有 Server Component 数据获取，也没有 Server Actions / Route Handlers / Middleware。
-所有页面都是 Client Component，直接访问同源 Go API。
+前端没有 SSR、Server Component、Server Actions、Route Handler 或 Middleware。
+所有页面都是普通 React 组件，直接访问同源 Go API。
 
 | 场景 | 文件 | 说明 |
 | --- | --- | --- |
@@ -35,14 +35,13 @@ const { data, error } = await fetchAllFamilyMembers();
 
 禁止事项：
 
-- 新增 `app/api/**/route.ts`、`middleware.ts` 或 `"use server"` 文件；
-- 在页面里使用 `export const dynamic`、`generateMetadata` 等需要服务端的导出；
-- 在浏览器代码中读取 `DATABASE_URL` 或任何服务端密钥；
-- 使用 `next/image` 的优化器（已设为 `unoptimized`）。
+- 引入 SSR/Node 运行时依赖（Next.js、Express 等），Go 已提供接口与静态托管；
+- 在客户端代码中读取 `DATABASE_URL` 或任何服务端密钥；
+- 新增会破坏 `vite build` 的浏览器外 API（如 `fs`、`node:` 前缀）。
 
 ## 页面开发模式
 
-参考 `app/family-tree/`：
+参考 `src/pages/family-tree/`：
 - `page.tsx` - Client Component，使用 `useSearchParams` 处理 URL 参数
 - `useEffect` 中调用 `lib/api/family.ts` 获取数据
 - 必须有加载中、错误、空数据三种状态
@@ -59,9 +58,9 @@ const { data, error } = await fetchAllFamilyMembers();
 
 ## 路由与鉴权
 
-- 公开：`/auth/*`、`/api/*`、`/_next/static/*`、`/images/*`、`/api/health`、`/api/config`
+- 公开：`/auth/*`、`/api/*`、`/assets/*`、`/images/*`、`/api/health`、`/api/config`
 - 受保护：`/` 与 `/family-tree/*` 的 HTML，未登录 302 到 `/auth/login/`
-- `.txt` RSC 骨架与静态资源不含数据，允许匿名加载
+- `/assets/*`、`/images/*` 与带扩展名的静态资源不做鉴权
 - 会话 Cookie：`genealogy_session`（HttpOnly、SameSite=Lax）
 - 站内链接统一带尾斜杠：`/auth/login/`、`/family-tree/graph/`
 
@@ -89,7 +88,7 @@ residence_place, updated_at
 - API：`GET /api/family-members/{id}/marriages`、`POST /api/marriages`、
   `PUT|DELETE /api/marriages/{id}`。
 - 新增/更新成员可传 `spouse_ids`；**不传表示不改变婚姻**，空数组表示解除全部。
-- 前端：`app/family-tree/spouse-editor.tsx`；成员查询会附带 `spouses` 摘要。
+- 前端：`src/pages/family-tree/spouse-editor.tsx`；成员查询会附带 `spouses` 摘要。
 - `family_members.spouse` 是配偶备注文本，不是结构化配偶。
 
 ### GEDCOM
@@ -119,10 +118,10 @@ residence_place, updated_at
 
 ```bash
 npm run dev:api      # Go API (127.0.0.1:8080)
-npm run dev          # Next.js 开发服务器，/api 代理到 Go
+npm run dev          # Vite 开发服务器，/api 代理到 Go
 npm test             # Node + Go 测试
 npx tsc --noEmit     # 类型检查
-npm run build        # 静态导出并复制到 backend/internal/web/dist
+npm run build        # 类型检查 + Vite 构建并复制到 backend/internal/web/dist
 npm run build:binary # 再执行 go build，产出 ./pure-genealogy
 npm run db:migrate   # 只执行数据库迁移
 ```

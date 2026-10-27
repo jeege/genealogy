@@ -3,9 +3,9 @@ import { test } from "node:test";
 import { forceSimulation, forceLink } from "d3-force-3d";
 import { loadTypeScript } from "./helpers/load-typescript.mjs";
 
-const linksModule = () => loadTypeScript("app/family-tree/graph/family-links.ts");
+const linksModule = () => loadTypeScript("src/pages/family-tree/graph/family-links.ts");
 // 按生产导入路径加载真实共享模块，避免巡游测试替换掉连线规则。
-const tourModule = () => loadTypeScript("app/family-tree/graph-3d/tour-utils.ts", {
+const tourModule = () => loadTypeScript("src/pages/family-tree/graph-3d/tour-utils.ts", {
   "../graph/family-links": linksModule(),
 });
 

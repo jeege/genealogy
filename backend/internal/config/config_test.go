@@ -83,3 +83,24 @@ func TestLoadRejectsUnsafeOrIncompleteConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestMultipleAppOrigins(t *testing.T) {
+	cfg, err := LoadFrom(append(baseEnv(), "APP_ORIGIN=http://localhost:3000, http://127.0.0.1:3000"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.AppOrigins) != 2 {
+		t.Fatalf("应解析出两个来源：%v", cfg.AppOrigins)
+	}
+	if cfg.AppOrigin != "http://localhost:3000" {
+		t.Fatalf("首个来源用于生成重置链接：%s", cfg.AppOrigin)
+	}
+	if cfg.AppOrigins[1] != "http://127.0.0.1:3000" {
+		t.Fatalf("第二个来源解析错误：%v", cfg.AppOrigins)
+	}
+
+	// 任一项非法都应整体拒绝，避免配置被静默忽略。
+	if _, err := LoadFrom(append(baseEnv(), "APP_ORIGIN=http://localhost:3000,postgres://db")); err == nil {
+		t.Fatal("非法来源应报错")
+	}
+}

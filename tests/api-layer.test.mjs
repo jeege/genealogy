@@ -31,7 +31,7 @@ function member(overrides = {}) {
 }
 
 test("浏览器 API 客户端同源请求 /api，并保持认证错误可读", async () => {
-  const client = loadTypeScript("lib/api/client.ts");
+  const client = loadTypeScript("src/lib/api/client.ts");
   const originalFetch = globalThis.fetch;
   try {
     const calls = [];
@@ -59,7 +59,7 @@ test("浏览器 API 客户端同源请求 /api，并保持认证错误可读", a
 });
 
 test("数据接口 401 会跳转登录页，认证接口不会", async () => {
-  const client = loadTypeScript("lib/api/client.ts");
+  const client = loadTypeScript("src/lib/api/client.ts");
   const originalFetch = globalThis.fetch;
   const originalWindow = globalThis.window;
   const redirects = [];
@@ -67,7 +67,7 @@ test("数据接口 401 会跳转登录页，认证接口不会", async () => {
     globalThis.window = { location: { assign: (url) => redirects.push(url) } };
     globalThis.fetch = async () => jsonResponse({ error: "登录已过期" }, 401);
     await assert.rejects(client.apiRequest("/family-members"), /登录已过期/);
-    assert.deepEqual(redirects, ["/auth/login/"]);
+    assert.deepEqual(redirects, ["/auth/login"]);
 
     await assert.rejects(client.apiRequest("/auth/session"), /登录已过期/);
     assert.equal(redirects.length, 1);
@@ -80,7 +80,7 @@ test("数据接口 401 会跳转登录页，认证接口不会", async () => {
 
 test("族谱数据层映射分页、CRUD、导入与统计接口", async () => {
   const calls = [];
-  const family = loadTypeScript("lib/api/family.ts", {
+  const family = loadTypeScript("src/lib/api/family.ts", {
     "./client": {
       apiRequest: async (path, init = {}) => {
         calls.push({ path, init });
@@ -153,7 +153,7 @@ test("族谱数据层映射分页、CRUD、导入与统计接口", async () => {
 });
 
 test("数据层把后端错误转换为页面可展示的结果", async () => {
-  const family = loadTypeScript("lib/api/family.ts", {
+  const family = loadTypeScript("src/lib/api/family.ts", {
     "./client": {
       apiRequest: async (path) => {
         if (path === "/statistics") throw new Error("统计失败");
@@ -169,7 +169,7 @@ test("数据层把后端错误转换为页面可展示的结果", async () => {
 });
 
 test("GEDCOM 导出下载使用服务端文件名并处理错误", async () => {
-  const family = loadTypeScript("lib/api/family.ts", {
+  const family = loadTypeScript("src/lib/api/family.ts", {
     "./client": { apiRequest: async () => ({}) },
   });
   const originalFetch = globalThis.fetch;
@@ -214,7 +214,7 @@ test("GEDCOM 导出下载使用服务端文件名并处理错误", async () => {
 
 test("GEDCOM 预览与导入映射后端响应与错误", async () => {
   const calls = [];
-  const family = loadTypeScript("lib/api/family.ts", {
+  const family = loadTypeScript("src/lib/api/family.ts", {
     "./client": {
       apiRequest: async (path, init = {}) => {
         calls.push({ path, init });
@@ -238,7 +238,7 @@ test("GEDCOM 预览与导入映射后端响应与错误", async () => {
   assert.equal(imported.result.members, 2);
   assert.deepEqual(JSON.parse(calls[1].init.body), { content: "0 HEAD", replace: true });
 
-  const failing = loadTypeScript("lib/api/family.ts", {
+  const failing = loadTypeScript("src/lib/api/family.ts", {
     "./client": { apiRequest: async () => { throw new Error("解析失败"); } },
   });
   assert.deepEqual(await failing.previewGEDCOMImport("x"), { preview: null, error: "解析失败" });

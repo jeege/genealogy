@@ -2,12 +2,12 @@
 
 ## 项目概述
 
-这是一个基于 **Next.js 16 (App Router)** + **Go + PostgreSQL** 的家族族谱管理应用，前端使用 TypeScript。
+这是一个基于 **React 19 + Vite** + **Go + PostgreSQL** 的家族族谱管理应用，前端使用 TypeScript。前端是纯客户端 SPA，没有 SSR 与服务端运行时。
 项目已进行**全面中文化**（zh-CN），包括 UI 文案、日期格式及元数据。Go 后端不再依赖 Supabase。
 
 ## 技术栈
 
-- **框架**: Next.js 16 (App Router, 静态导出 `output: export`)
+- **框架**: React 19 + Vite 6 + React Router 7（纯 SPA，history 路由）
 - **后端**: Go 1.24（标准库 HTTP + pgx）
 - **数据库/认证**: PostgreSQL + 自建邮箱密码认证（服务端会话 Cookie）
 - **UI**: shadcn/ui (new-york 风格) + Tailwind CSS
@@ -22,7 +22,8 @@
 
 ### 静态前端与 API 使用规范
 
-前端没有 Server Component 数据获取，也没有 Server Actions / Route Handlers / Middleware。
+前端没有服务端渲染、Server Component、Server Actions、Route Handler 或 Middleware。
+所有页面都是普通 React 组件，构建产物是一组静态文件。
 所有页面都是 Client Component，直接访问同源 Go API。
 
 | 场景 | 使用文件 | 说明 |
@@ -39,16 +40,16 @@ import { fetchAllFamilyMembers } from "@/lib/api/family";
 const { data, error } = await fetchAllFamilyMembers();
 ```
 
-- 不要新增 `app/api/**/route.ts`、`middleware.ts` 或 `"use server"` 文件，静态导出不支持。
+- 不要引入 SSR/Node 运行时依赖（如 Next.js、Express），Go 已经提供接口与静态托管。
 - 页面里不要写 `export const dynamic` / `generateMetadata` 等需要服务端的导出。
 - 数据获取放在 `useEffect` 中，并提供加载与错误状态。
 
 ### 页面鉴权规则
 
-由 Go 静态处理器实现，而不是 Next.js：
-- 公开：`/auth/*`、`/api/*`、`/_next/static/*`、`/images/*`、`/api/health`、`/api/config`
+由 Go 静态处理器实现，而不是前端路由守卫：
+- 公开：`/auth/*`、`/api/*`、`/assets/*`、`/images/*`、`/api/health`、`/api/config`
 - 受保护：`/` 与 `/family-tree/*` 的 HTML；未登录 302 到 `/auth/login/`
-- `.txt` RSC 骨架与静态资源不含数据，允许匿名加载
+- `/assets/*`、`/images/*` 与带扩展名的静态资源不做鉴权，否则页面资源会拿到登录页 HTML
 - 会话 Cookie 名称: `genealogy_session`（HttpOnly、SameSite=Lax）
 - 链接统一使用带尾斜杠的静态路径，如 `/auth/login/`、`/family-tree/graph/`
 
@@ -76,7 +77,7 @@ useEffect(() => { /* 重新拉取 */ }, [page, search, version]);
 
 ## 核心功能模块
 
-### 族谱管理 (`app/family-tree/`)
+### 族谱管理 (`src/pages/family-tree/`)
 - **成员列表**: 分页展示家族成员，支持搜索。已针对移动端优化，工具栏支持自动换行，表格支持横向滚动。
 - **添加/编辑**: 
     - 包含成员基本信息、父母关系（`father_id`）、配偶、生日（`birthday`）、居住地（`residence_place`）等。
@@ -90,7 +91,7 @@ useEffect(() => { /* 重新拉取 */ }, [page, search, version]);
     - **响应式**: 适配 PC（书卷比例）与移动端（全屏卡片），且完美支持明暗模式切换。
 - **通用组件**: `RichTextViewer` 支持 `animate` 属性，用于触发逐字显示的艺术效果。
 
-### 族谱可视化 (`app/family-tree/graph/`)
+### 族谱可视化 (`src/pages/family-tree/graph/`)
 - 基于 `@xyflow/react` 实现。
 - 自动生成树形结构图，展示成员关系。
 - **视觉层级与信息密度升级 (v2.0)**:
@@ -108,7 +109,7 @@ useEffect(() => { /* 重新拉取 */ }, [page, search, version]);
 - **图片导出**: HTML5 Canvas 多层合成（背景+水印+节点），输出高质量 JPEG。
 - 详情弹窗复用 `MemberDetailDialog`。
 
-### 3D 族谱可视化 (`app/family-tree/graph-3d/`)
+### 3D 族谱可视化 (`src/pages/family-tree/graph-3d/`)
 - 基于 `react-force-graph-3d` 实现。
 - 提供三维视角的力导向图，支持全屏、搜索定位、节点点击详情等功能。
 - **自动巡游 (Auto Tour)**:
@@ -119,7 +120,7 @@ useEffect(() => { /* 重新拉取 */ }, [page, search, version]);
 - 使用 `three-spritetext` 渲染清晰的文字标签。
 - 详情弹窗复用 `MemberDetailDialog`.
 
-### 统计与分析 (`app/family-tree/statistics/`)
+### 统计与分析 (`src/pages/family-tree/statistics/`)
 - 基于 `recharts` 实现的家族数据仪表盘。
 - **可视化统计**:
     - **数据概览**: 总人数、男性比例、在世人数、世代总数。
@@ -134,7 +135,7 @@ useEffect(() => { /* 重新拉取 */ }, [page, search, version]);
 - 一位成员可有多段婚姻；同一对成员唯一；删除成员级联删除婚姻。
 - 成员查询会批量附带 `spouses` 摘要（`ListSpouseLinks`），避免 N+1。
 - `family_members.spouse` 仅作配偶备注文本，兼容旧数据与 CSV 导入。
-- 编辑入口 `app/family-tree/spouse-editor.tsx`；API 见 `POST /api/marriages` 等。
+- 编辑入口 `src/pages/family-tree/spouse-editor.tsx`；API 见 `POST /api/marriages` 等。
 
 ### GEDCOM 导入导出 (`backend/internal/gedcom/`)
 - 解析 GEDCOM 5.5.1 子集：`INDI`、`FAM`、`NAME`/`SEX`/`BIRT`/`DEAT`/`NOTE`/`OCCU`/`RESI`，
@@ -142,9 +143,9 @@ useEffect(() => { /* 重新拉取 */ }, [page, search, version]);
 - 导入时由父亲链推导世代，同一 `FAM` 内 `CHIL` 顺序作为排行。
 - 日期原始文本保留在 `birth_date_raw`/`death_date_raw`，同时解析 ISO 日期。
 - 自动识别 UTF-8 与 GB18030；API 见 `GET /api/family-members/gedcom` 等。
-- 前端入口：`app/family-tree/gedcom-import-dialog.tsx` 与列表工具栏「导出 GEDCOM」。
+- 前端入口：`src/pages/family-tree/gedcom-import-dialog.tsx` 与列表工具栏「导出 GEDCOM」。
 
-### 生平册 (`app/family-tree/biography-book/`)
+### 生平册 (`src/pages/family-tree/biography-book/`)
 - 将所有填写生平事迹的族人编制成一本可翻阅的电子书籍。
 - **封面设计**: 深棕色古籍风格 + 纹理装饰 + 书脊效果，显示收录人数。
 - **3D 翻页动效**: 
@@ -209,9 +210,9 @@ birth_date_raw, death_date_raw, residence_place, updated_at
 
 ```bash
 npm run dev:api    # 启动 Go API (127.0.0.1:8080)
-npm run dev        # 启动 Next.js 开发服务器，/api 代理到 Go
+npm run dev        # 启动 Vite 开发服务器，/api 代理到 Go
 npm test           # Node + Go 测试
-npm run build      # 静态导出并复制到 backend/internal/web/dist
+npm run build      # 类型检查 + Vite 构建并复制到 backend/internal/web/dist
 npm run build:binary # 再执行 go build，产出 ./pure-genealogy
 npm run db:migrate # 只执行数据库迁移
 ```
@@ -237,7 +238,7 @@ npm run db:migrate # 只执行数据库迁移
 
 ## 环境变量
 
-本地开发 `.env.local`（Go API 与 Next.js 分进程运行）:
+本地开发 `.env.local`（Go API 与 Vite 分进程运行）:
 ```
 DATABASE_URL=postgres://genealogy:change-me@127.0.0.1:5432/genealogy?sslmode=disable
 API_PORT=8080

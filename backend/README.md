@@ -1,6 +1,6 @@
 # Go 后端
 
-族谱系统的 HTTP API、认证、PostgreSQL 访问层，以及内嵌的 Next.js 静态前端。
+族谱系统的 HTTP API、认证、PostgreSQL 访问层，以及内嵌的 React（Vite）静态前端。
 构建完成后就是一个可执行文件。完整配置与接口说明见
 [`docs/backend.md`](../docs/backend.md)。
 
@@ -8,7 +8,7 @@
 
 ```bash
 # 仓库根目录
-npm run build          # 静态导出并复制到 backend/internal/web/dist
+npm run build          # Vite 构建并复制到 backend/internal/web/dist
 npm run build:binary   # 再执行 go build，产出 ./pure-genealogy
 ```
 

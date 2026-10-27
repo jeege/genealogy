@@ -55,7 +55,7 @@ test("配置包含 DATABASE_URL 与初始管理员，权限 0600 且拒绝覆盖
     assert.equal(env.FAMILY_SURNAME, "刘");
     assert.equal(env.APP_PORT, "3000");
     assert.equal(env.GENEALOGY_IMAGE, "ghcr.io/jeege/genealogy:latest");
-        assert.equal(env.SUPABASE_INTERNAL_URL, undefined);
+    assert.equal(env.SUPABASE_INTERNAL_URL, undefined);
     assert.equal(env.NEXT_PUBLIC_SUPABASE_URL, undefined);
     assert.equal(env.ANON_KEY, undefined);
     await assert.rejects(writeConfiguration({ siteUrl: "http://localhost:3000", output }), { code: "EEXIST" });

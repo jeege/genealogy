@@ -85,17 +85,28 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 }
 
 // checkOrigin 防止第三方站点利用浏览器 Cookie 发起写操作。
+// APP_ORIGIN 支持配置多个合法源（如 localhost 与 127.0.0.1），用逗号分隔。
 func (s *Server) checkOrigin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
 			origin := r.Header.Get("Origin")
-			if origin != "" && s.cfg.AppOrigin != "" && !strings.EqualFold(origin, s.cfg.AppOrigin) {
-				writeError(w, http.StatusForbidden, "请求来源不受信任")
+			if origin != "" && len(s.cfg.AppOrigins) > 0 && !originAllowed(origin, s.cfg.AppOrigins) {
+				// 提示里带上配置项名称，方便部署时定位 APP_ORIGIN 写错。
+				writeError(w, http.StatusForbidden, "请求来源不受信任：请检查 APP_ORIGIN 是否与浏览器地址一致")
 				return
 			}
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func originAllowed(origin string, allowed []string) bool {
+	for _, candidate := range allowed {
+		if strings.EqualFold(origin, candidate) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) requireAuth(next http.Handler) http.Handler {

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/icon.png" />
+    <meta name="description" content="基于 Go + PostgreSQL 构建的家族族谱管理系统" />
+    <title>族谱管理系统</title>
+    <script>
+      // 部分依赖（@xyflow/react、tiny-invariant）在浏览器分支中读取 process.env；
+      // 纯前端没有 Node 运行时，这里提供最小降级实现。
+      window.process = window.process || { env: { NODE_ENV: "production" } };
+    </script>
+    <script>
+      // 首屏渲染前应用主题，避免明暗模式闪烁。
+      (function () {
+        try {
+          var stored = localStorage.getItem("theme");
+          var dark = stored === "dark" || ((!stored || stored === "system") &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.classList.toggle("dark", dark);
+          document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        } catch (error) {
+          /* 隐私模式下忽略 */
+        }
+      })();
+    </script>
+  </head>
+  <body class="font-serif antialiased">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -241,6 +241,7 @@ func testServer(t *testing.T, authenticator Authenticator, members MemberStore, 
 	t.Helper()
 	cfg := config.Config{
 		AppOrigin:        "http://app.test",
+		AppOrigins:       []string{"http://app.test"},
 		PublicBaseURL:    "http://app.test",
 		FamilySurname:    "刘",
 		SessionTTL:       time.Hour,
@@ -489,9 +490,9 @@ func TestConfigAndStaticPageAuth(t *testing.T) {
 	if publicPage.Code != http.StatusOK || !strings.Contains(publicPage.Body.String(), "static:/auth/login/") {
 		t.Fatalf("登录页应公开：%d %s", publicPage.Code, publicPage.Body.String())
 	}
-	asset := perform(t, server, http.MethodGet, "/_next/static/app.js", nil, nil)
-	if asset.Code != http.StatusOK {
-		t.Fatalf("静态资源应公开：%d", asset.Code)
+	loginAsset := perform(t, server, http.MethodGet, "/assets/login-page.js", nil, nil)
+	if loginAsset.Code != http.StatusOK {
+		t.Fatalf("登录页资源应公开：%d", loginAsset.Code)
 	}
 
 	for _, target := range []string{"/", "/family-tree/", "/family-tree/graph/"} {
@@ -506,9 +507,10 @@ func TestConfigAndStaticPageAuth(t *testing.T) {
 		t.Fatalf("已登录页面应返回：%d %s", authorized.Code, authorized.Body.String())
 	}
 
-	rscPayload := perform(t, server, http.MethodGet, "/family-tree/graph/index.txt?_rsc=abc", nil, map[string]string{"RSC": "1"})
-	if rscPayload.Code != http.StatusOK {
-		t.Fatalf("未登录的 RSC 骨架应可加载：%d", rscPayload.Code)
+	// 静态资源（哈希 JS/CSS）不参与页面鉴权，否则未登录也会拿到 HTML。
+	asset := perform(t, server, http.MethodGet, "/assets/index-abc123.js", nil, nil)
+	if asset.Code != http.StatusOK || !strings.Contains(asset.Body.String(), "static:/assets/index-abc123.js") {
+		t.Fatalf("静态资源应可公开访问：%d", asset.Code)
 	}
 
 	unknownAPI := perform(t, server, http.MethodGet, "/api/not-found", nil, nil)

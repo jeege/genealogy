@@ -13,9 +13,9 @@
 | Supabase 行数上限分页 | 单次查询返回完整结果 |
 | Supabase 邮件模板 | 可选 SMTP，未配置时重置链接写入日志 |
 
-前端使用 `output: "export"` 静态导出，构建时复制到 `backend/internal/web/dist`，
-并通过 `//go:embed` 嵌入 Go 二进制。浏览器与 Go 同源，认证与数据请求直接访问
-`/api/*`；Go 在返回族谱 HTML 前校验会话，静态资源与 RSC 页面骨架公开。
+前端是 React + Vite 的纯客户端 SPA，构建时输出 `dist/` 并复制到
+`backend/internal/web/dist`，通过 `//go:embed` 嵌入 Go 二进制。浏览器与 Go 同源，
+认证与数据请求直接访问 `/api/*`；Go 在返回族谱 HTML 前校验会话，静态资源公开。
 数据库连接串不会进入浏览器。
 
 ## 运行时配置
@@ -26,7 +26,7 @@
 | `FAMILY_SURNAME` | 否 | `刘` | 运行时姓氏，由 `GET /api/config` 提供给前端 |
 | `API_HOST` | 否 | `127.0.0.1` | 监听地址；容器内使用 `0.0.0.0` |
 | `API_PORT` | 否 | `8080` | 监听端口；Compose 默认映射到宿主机 3000 |
-| `APP_ORIGIN` | 否 | — | 站点源地址；设置后校验写请求的 `Origin` |
+| `APP_ORIGIN` | 否 | — | 站点源地址；设置后校验写请求的 `Origin`，多个用逗号分隔（如 `http://localhost:3000,http://127.0.0.1:3000`） |
 | `PUBLIC_BASE_URL` | 否 | `APP_ORIGIN` 或 `http://localhost:3000` | 密码重置链接的站点前缀 |
 | `SESSION_TTL` | 否 | `720h` | 会话有效期，1h 至 8760h |
 | `PASSWORD_RESET_TTL` | 否 | `1h` | 重置令牌有效期，5m 至 24h |
@@ -53,7 +53,7 @@
 1. 注册或登录时，Go API 生成 32 字节随机令牌，浏览器收到 HttpOnly 的
    `genealogy_session` Cookie。
 2. 数据库 `sessions` 表只保存令牌的 SHA-256 散列；会话默认 30 天过期。
-3. Go 静态处理器在返回 `/` 与 `/family-tree/*` 的 HTML 前校验会话；未登录跳转 `/auth/login/`。静态资源与 `.txt` RSC 骨架不包含族谱数据，可直接加载。
+3. Go 静态处理器在返回 `/` 与 `/family-tree/*` 的 HTML 前校验会话；未登录跳转 `/auth/login/`。`/assets/*`、`/images/*` 与带扩展名的静态资源无需登录。
 4. 前端数据请求遇到 `401` 时由 `lib/api/client.ts` 跳转登录页。
 5. 退出登录删除服务端会话并清除 Cookie。
 6. 密码重置令牌同样只保存散列，使用一次后标记 `used_at`；重置成功后撤销该用户全部会话。
@@ -212,7 +212,7 @@ curl -b cookies.txt -H 'Content-Type: text/plain' \
 ## 静态前端与构建
 
 ```bash
-npm run build          # next build（静态导出）并复制到 backend/internal/web/dist
+npm run build          # tsc --noEmit + vite build，并复制到 backend/internal/web/dist
 npm run build:binary   # 再执行 go build，产出仓库根目录的 pure-genealogy
 ```
 
@@ -222,10 +222,11 @@ npm run build:binary   # 再执行 go build，产出仓库根目录的 pure-gene
 DATABASE_URL='postgres://...' APP_ORIGIN='http://localhost:8080' ./pure-genealogy serve
 ```
 
-- 静态资源路径：`/_next/static/*` 长缓存，其他资源 1 天缓存，HTML/RSC 不缓存。
+- 静态资源路径：`/assets/*`（Vite 带哈希产物）长缓存，`/images/*` 等 1 天缓存，`index.html` 不缓存。
+- 未匹配的页面路径回退到 `index.html`（SPA history 路由）；缺失的 JS/CSS 仍返回 404。
 - 无扩展名目录自动 301 到带 `/` 的地址。
 - 未构建前端时二进制仍可启动，`/api/*` 正常，页面返回 404。
-- 开发时可使用 `npm run dev:api` + `npm run dev`；Next 开发服务器通过
+- 开发时可使用 `npm run dev:api` + `npm run dev`；Vite 开发服务器通过
   `DEV_API_PROXY_TARGET`（默认 `http://127.0.0.1:8080`）代理 `/api`。
 
 ## CLI
@@ -253,7 +254,7 @@ API_PORT=8080 go run ./cmd/server healthcheck
 
 - 会话与重置令牌均为不透明随机值，数据库泄露不会直接得到可用令牌。
 - Cookie 为 HttpOnly、SameSite=Lax；生产 HTTPS 下请保持 `COOKIE_SECURE=auto` 或 `true`。
-- 写请求在设置 `APP_ORIGIN` 时校验 `Origin`，防止跨站写操作。
+- 写请求在设置 `APP_ORIGIN` 时校验 `Origin`，防止跨站写操作；`localhost` 与 `127.0.0.1` 是不同来源，需同时列出或统一访问方式。
 - 建议在反向代理层增加登录限速与 TLS 终止；二进制默认只监听 `127.0.0.1`，容器内设置为 `0.0.0.0`。
 - 未配置 SMTP 时重置链接会写入 API 日志，请限制日志访问权限。
 - 本项目是单部署共享一份族谱，所有登录用户权限相同，不是多租户权限模型。
@@ -272,8 +273,8 @@ Go 测试位于各包内，覆盖配置校验、认证服务、导入、统计�
 
 | 路径 | Cache-Control | 原因 |
 | --- | --- | --- |
-| `/_next/static/*` | `public, max-age=31536000, immutable` | 文件名带内容散列 |
-| `*.html`、`*.txt` | `no-cache` | 页面与 RSC 骨架需每次确认 |
+| `/assets/*` | `public, max-age=31536000, immutable` | Vite 产物文件名带内容哈希 |
+| `index.html` | `no-cache` | 每次确认，避免发版后引用旧资源 |
 | 其他（图片、字体等） | `public, max-age=86400` | 普通静态资源 |
 
 - 目录请求缺少尾斜杠时返回 `301` 到带 `/` 的地址，避免相对资源路径错位。

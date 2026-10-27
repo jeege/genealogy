@@ -246,7 +246,7 @@ docker pull ghcr.io/jeege/genealogy:latest
 - 推送 `v*` 标签；
 - 在 Actions 页面手动运行，可填写自定义版本标签。
 
-流程依次执行 `npm ci`、`npm test`（Node + Go）、`tsc --noEmit`、静态导出与
+流程依次执行 `npm ci`、`npm test`（Node + Go）、`tsc --noEmit`、Vite 构建与
 Go 单二进制构建校验，然后用 Buildx 构建 `linux/amd64` 与 `linux/arm64` 双架构镜像并推送。
 构建使用 GitHub Actions 缓存与 `GITHUB_TOKEN`，**无需配置任何仓库密钥**。
 
@@ -270,5 +270,5 @@ bash scripts/publish-image.sh --engine buildx --version 2026.10.26 --push
 ```
 
 可用 `GENEALOGY_REPOSITORY` 覆盖目标仓库，例如 `GENEALOGY_REPOSITORY=ghcr.io/其他用户/其他仓库`。
-Dockerfile 先执行 `npm run build` 生成静态页面，再复制进 `backend/internal/web/dist`
+Dockerfile 先执行 `npm run build` 生成静态 SPA，再复制进 `backend/internal/web/dist`
 并 `go build`，最终镜像只包含一个静态链接的 Go 二进制。

@@ -1,4 +1,4 @@
-# 前端静态导出，随后嵌入 Go 二进制；最终镜像只包含一个可执行文件。
+# 前端用 Vite 构建为静态 SPA，随后嵌入 Go 二进制；最终镜像只包含一个可执行文件。
 FROM node:22-bookworm-slim AS web
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -11,7 +11,7 @@ WORKDIR /src
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 COPY backend/ ./
-COPY --from=web /app/out ./internal/web/dist
+COPY --from=web /app/dist ./internal/web/dist
 RUN mkdir -p /out && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/genealogy-server ./cmd/server
 
 FROM alpine:3.20

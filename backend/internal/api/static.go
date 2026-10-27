@@ -26,9 +26,9 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "前端静态资源未构建")
 		return
 	}
-	// RSC 载荷只包含页面骨架，不包含族谱数据；允许其加载后由 API 的 401
-	// 统一跳转登录，避免客户端路由把 HTML 登录页当作 RSC 解析而报错。
-	if isProtectedPage(r.URL.Path) && !isRSCRequest(r) && !strings.HasSuffix(r.URL.Path, ".txt") {
+	// 只有受保护的页面导航需要服务端鉴权；前端数据请求遇到 401 会跳转登录页。
+	// 静态资源（/assets、/images、带扩展名）不做重定向，否则页面资源会拿到 HTML。
+	if isProtectedPage(r.URL.Path) && !isStaticAssetRequest(r.URL.Path) {
 		cookie, err := r.Cookie(SessionCookieName)
 		if err != nil || cookie.Value == "" {
 			redirectToLogin(w, r)
@@ -48,8 +48,13 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 	s.static.ServeHTTP(w, r)
 }
 
-func isRSCRequest(r *http.Request) bool {
-	return r.Header.Get("RSC") == "1" || r.URL.Query().Has("_rsc")
+// isStaticAssetRequest 判断请求是否是要静态资源而非页面导航。
+func isStaticAssetRequest(path string) bool {
+	if strings.HasPrefix(path, "/assets/") || strings.HasPrefix(path, "/images/") {
+		return true
+	}
+	lastSegment := path[strings.LastIndex(path, "/")+1:]
+	return strings.Contains(lastSegment, ".")
 }
 
 func redirectToLogin(w http.ResponseWriter, r *http.Request) {

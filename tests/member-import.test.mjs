@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { loadTypeScript } from "./helpers/load-typescript.mjs";
 
-const { parseImportRows } = loadTypeScript("app/family-tree/member-import.ts");
+const { parseImportRows } = loadTypeScript("src/pages/family-tree/member-import.ts");
 
 test("中文表头映射为后端导入字段", () => {
   const [member] = parseImportRows([{
