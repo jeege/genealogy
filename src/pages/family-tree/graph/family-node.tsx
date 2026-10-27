@@ -75,6 +75,8 @@ function MemberBlock({
         "flex flex-col items-center gap-1.5 w-full min-w-0",
         clickable && "cursor-pointer rounded-md hover:bg-accent/40 transition-colors",
         compact ? "px-1 py-0.5" : "px-2",
+        // 在世状态按成员各自表达：夫妻节点里一方已故不应把另一方一起变灰。
+        !member.is_alive && "rounded-md bg-muted/40 opacity-75 grayscale-[0.4]",
       )}
       onClick={
         clickable
@@ -148,13 +150,6 @@ function FamilyMemberNodeComponent({ data }: FamilyNodeProps) {
     }
   };
 
-  const handlePartnerClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (partner && nodeData.onPartnerClick) {
-      nodeData.onPartnerClick(partner);
-    }
-  };
-
   return (
     <div
       className={cn(
@@ -163,8 +158,8 @@ function FamilyMemberNodeComponent({ data }: FamilyNodeProps) {
         // 变暗模式 (当有高亮发生，但此节点不在路径上)
         nodeData.isDimmed && "opacity-30 grayscale scale-95 blur-[0.5px]",
 
-        // 背景色
-        nodeData.is_alive ? "bg-card" : "bg-muted/50",
+        // 背景色：合并节点保持中性，已故观感由各自的成员块表达
+        partner || nodeData.is_alive ? "bg-card" : "bg-muted/50",
 
         // 边框颜色逻辑
         // 1. 当前选中高亮 -> 黄色光环 (最强)
@@ -173,14 +168,16 @@ function FamilyMemberNodeComponent({ data }: FamilyNodeProps) {
           // 2. 路径高亮 -> 金色边框 (次强)
           : nodeData.isPathHighlighted
             ? "border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.4)] z-10"
-            // 3. 常规边框 -> 按性别/状态
-            : borderClass(nodeData),
+            // 3. 常规边框 -> 单成员按性别/状态；夫妻双方性别不同，用中性边框
+            : partner
+              ? "border-border"
+              : borderClass(nodeData),
 
         // 折叠时的强化样式 (仅在非变暗状态下显示)
         !nodeData.isDimmed && nodeData.collapsed && "border-primary shadow-lg",
 
-        // 已故样式
-        !nodeData.is_alive && !nodeData.isDimmed && "opacity-80 grayscale-[0.2]",
+        // 已故样式：只用于单成员节点，合并节点由各自的成员块表达
+        !partner && !nodeData.is_alive && !nodeData.isDimmed && "opacity-80 grayscale-[0.2]",
 
         // 悬浮提升感
         "hover:shadow-xl hover:-translate-y-0.5 transition-transform duration-300",
@@ -193,17 +190,42 @@ function FamilyMemberNodeComponent({ data }: FamilyNodeProps) {
       )}
       style={nodeData.nodeWidth ? { width: nodeData.nodeWidth } : undefined}
     >
-      {/* 顶部颜色横条 - 增加圆角以适配移除 overflow-hidden 后的容器 */}
-      <div
-        className={cn(
-          "absolute top-0 inset-x-0 h-1 rounded-t-[inherit]",
-          nodeData.isHighlighted
-            ? "bg-amber-500"
-            : nodeData.isPathHighlighted
-              ? "bg-amber-400"
-              : barClass(nodeData),
-        )}
-      />
+      {/* 顶部颜色横条：合并节点左右各半，分别反映两人的性别与在世状态 */}
+      {partner ? (
+        <div className="absolute top-0 inset-x-0 h-1 rounded-t-[inherit] flex overflow-hidden">
+          <div
+            className={cn(
+              "flex-1",
+              nodeData.isHighlighted
+                ? "bg-amber-500"
+                : nodeData.isPathHighlighted
+                  ? "bg-amber-400"
+                  : barClass(nodeData),
+            )}
+          />
+          <div
+            className={cn(
+              "flex-1",
+              nodeData.isHighlighted
+                ? "bg-amber-500"
+                : nodeData.isPathHighlighted
+                  ? "bg-amber-400"
+                  : barClass(partner),
+            )}
+          />
+        </div>
+      ) : (
+        <div
+          className={cn(
+            "absolute top-0 inset-x-0 h-1 rounded-t-[inherit]",
+            nodeData.isHighlighted
+              ? "bg-amber-500"
+              : nodeData.isPathHighlighted
+                ? "bg-amber-400"
+                : barClass(nodeData),
+          )}
+        />
+      )}
 
       {/* 顶部连接点 - 连接到父亲 */}
       <Handle
