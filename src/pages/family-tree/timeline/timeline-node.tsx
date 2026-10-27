@@ -1,18 +1,23 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import { memo } from "react";
+import { useCalendar } from "@/lib/calendar/calendar-context";
 import { cn } from "@/lib/utils";
 
 export interface TimelineNodeData extends Record<string, unknown> {
   name: string;
   startYear: number;
+  birthdayISO?: string | null;
+  deathISO?: string | null;
   endYear: number;
   isAlive: boolean;
   width: number;
 }
 
 export const TimelineNode = memo(({ data, selected }: NodeProps<Node<TimelineNodeData>>) => {
-  const { name, startYear, endYear, isAlive, width } = data;
+  const { name, startYear, endYear, isAlive, width, birthdayISO, deathISO } = data;
+  const { formatDate } = useCalendar();
   const lifespan = isAlive ? "在世" : `${startYear} - ${endYear}`;
+  const lunarHint = birthdayISO ? `${formatDate(birthdayISO)} 生` : "";
 
   return (
     <div
@@ -24,7 +29,11 @@ export const TimelineNode = memo(({ data, selected }: NodeProps<Node<TimelineNod
         selected && "ring-2 ring-primary border-primary shadow-md"
       )}
       style={{ width: width }}
-      title={`${name} (${startYear} - ${isAlive ? "至今" : endYear})`}
+      title={[
+        `${name}（${startYear} - ${isAlive ? "至今" : endYear}）`,
+        lunarHint,
+        deathISO ? `${formatDate(deathISO)} 卒` : "",
+      ].filter(Boolean).join(" · ")}
     >
       <span className="font-bold truncate mr-2">{name}</span>
       {width > 80 && <span className="opacity-70 truncate">{lifespan}</span>}

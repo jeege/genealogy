@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { useRuntimeConfig } from "@/components/runtime-config-provider";
 import type { BiographyMember } from "./actions";
 import { RichTextViewer } from "@/components/rich-text/viewer";
+import { useCalendar } from "@/lib/calendar/calendar-context";
 
 interface BiographyBookProps {
     members: BiographyMember[];
@@ -201,11 +202,8 @@ export function BiographyBook({ members }: BiographyBookProps) {
 
     const totalPages = members.length;
 
-    const formatDate = useCallback((dateStr: string | null) => {
-        if (!dateStr) return "-";
-        const [y, m, d] = dateStr.split("-");
-        return `${y}年${m}月${d}日`;
-    }, []);
+    // 跟随全站历法：公历或农历，底层仍是公历存储值。
+    const { formatDate } = useCalendar();
 
     // 搜索结果
     const searchResults = useMemo(() => {

@@ -74,6 +74,9 @@ function TimelineFlow({ initialData }: TimelineClientProps) {
           startYear,
           endYear,
           isAlive,
+          // 时间轴的刻度是公历年份；tooltip 中额外给出农历，便于族谱对照。
+          birthdayISO: m.birthday,
+          deathISO: m.death_date,
         };
       })
       .sort((a, b) => a.startYear - b.startYear); // Sort by birth year

@@ -195,6 +195,16 @@ curl -b cookies.txt -H 'Content-Type: text/plain' \
 - 忽略 `SOUR`、`OBJE`（多媒体）、`ADDR` 结构化地址、LDS 与自定义事件。
 - 不支持事件级来源与引文。
 
+## 公历与农历
+
+前端提供「公历 / 农历」展示与输入切换，**后端与数据库格式不变**：
+
+- 接口与表结构始终使用公历 `YYYY-MM-DD`（`birthday`、`death_date`，以及
+  GEDCOM 原始日期列 `birth_date_raw` / `death_date_raw`）。
+- 农历换算完全在前端完成，基于浏览器的 `Intl` 中国历法数据，不新增依赖、不改库。
+- 支持闰月（如 2023 年闰二月），非法农历日期（小月三十、不存在的闰月）会被拒绝并提示。
+- 统计、时间轴刻度、GEDCOM 导出仍按公历处理，避免历法差异写入数据。
+
 ## 数据库
 
 迁移文件位于 `backend/internal/database/migrations/`，编译进二进制，启动时自动执行：

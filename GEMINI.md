@@ -129,6 +129,12 @@ useEffect(() => { /* 重新拉取 */ }, [page, search, version]);
     - **年龄分布**: 柱状图展示在世成员的年龄段分布（基于生日数据）。
     - **字辈趋势**: 自动统计姓名中第二个字（通常为字辈）的出现频率。
 
+### 公历/农历 (`src/lib/calendar/`)
+- 存储永远是公历 ISO 日期；农历只是展示与输入层，基于 `Intl` 中国历法，不新增依赖。
+- `CalendarProvider` 提供 `mode` 与 `formatDate`；顶栏 `CalendarSwitcher` 切换。
+- `DateField` 在农历模式下渲染年/月（含闰月）/日下拉，换算后回写 ISO 字符串。
+- 月份名兼容 Intl 的「十一月」与民间「冬月」；`fromLunar` 需按 relatedYear 过滤，避免跨年腊月混入。
+
 ### 配偶关系 (`marriages`)
 - `marriages` 表：`husband_id`、`wife_id`（可空）、`status`（married/divorced/widowed）、
   `married_on`/`divorced_on` 与原始文本列、`note`。

@@ -1,6 +1,7 @@
 import { Link } from "@/components/link";
 import { AuthButton } from "@/components/auth-button";
 import { ThemeSwitcher } from "@/components/theme-switcher";
+import { CalendarSwitcher } from "@/components/calendar-switcher";
 import { MobileNav } from "@/components/mobile-nav";
 import { useRuntimeConfig } from "@/components/runtime-config-provider";
 
@@ -34,7 +35,8 @@ export function FamilyTreeHeader() {
           </Link>
         </nav>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
+          <CalendarSwitcher />
           <ThemeSwitcher />
           <div className="hidden md:block">
             <AuthButton />

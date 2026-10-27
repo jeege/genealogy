@@ -11,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useCalendar } from "@/lib/calendar/calendar-context";
 
 interface MemberDetailDialogProps {
   isOpen: boolean;
@@ -34,13 +35,9 @@ export function MemberDetailDialog({
     }
   }, [isOpen, member]);
 
-  if (!member) return null;
+  const { formatDate } = useCalendar();
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return "-";
-    const [y, m, d] = dateStr.split("-");
-    return `${y}年${m}月${d}日`;
-  };
+  if (!member) return null;
 
   return (
     <Dialog modal={true} open={isOpen} onOpenChange={onOpenChange}>

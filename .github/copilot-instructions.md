@@ -82,6 +82,13 @@ residence_place, updated_at
 ### 认证表
 `users`、`sessions`、`password_reset_tokens`、`schema_migrations`。
 
+### 公历与农历
+
+- 数据库与 API 始终使用公历 `YYYY-MM-DD`；农历只在前端展示与输入。
+- 相关代码：`src/lib/calendar/lunar.ts`（转换）、`calendar-context.tsx`（全局状态）、
+  `src/components/date-field.tsx`（日期输入）。
+- 新增日期展示请使用 `useCalendar().formatDate`，不要自己拆 ISO 字符串。
+
 ### 配偶关系
 
 - `marriages` 表连接两位成员，支持多段婚姻与 `married`/`divorced`/`widowed` 状态。

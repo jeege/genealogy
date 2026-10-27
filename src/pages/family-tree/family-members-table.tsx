@@ -46,6 +46,8 @@ import { FatherCombobox } from "./father-combobox";
 import { RichTextEditor } from "@/components/rich-text/editor";
 import { RichTextViewer } from "@/components/rich-text/viewer";
 import { cn } from "@/lib/utils";
+import { useCalendar } from "@/lib/calendar/calendar-context";
+import { DateField } from "@/components/date-field";
 
 interface FamilyMembersTableProps {
   initialData: FamilyMember[];
@@ -66,6 +68,7 @@ export function FamilyMembersTable({
 }: FamilyMembersTableProps) {
   const navigate = useNavigate();
   const searchParams = useSearchParams();
+  const { formatDate } = useCalendar();
   const [isPending, startTransition] = React.useTransition();
 
   const [selectedIds, setSelectedIds] = React.useState<Set<number>>(new Set());
@@ -484,13 +487,10 @@ export function FamilyMembersTable({
                   <Label htmlFor="birthday" className="text-right">
                     生日
                   </Label>
-                  <Input
+                  <DateField
                     id="birthday"
-                    type="date"
                     value={formData.birthday}
-                    onChange={(e) =>
-                      setFormData({ ...formData, birthday: e.target.value })
-                    }
+                    onChange={(next) => setFormData({ ...formData, birthday: next })}
                     className="col-span-3"
                   />
                 </div>
@@ -556,13 +556,10 @@ export function FamilyMembersTable({
                     <Label htmlFor="death_date" className="text-right">
                       卒年
                     </Label>
-                    <Input
+                    <DateField
                       id="death_date"
-                      type="date"
                       value={formData.death_date}
-                      onChange={(e) =>
-                        setFormData({ ...formData, death_date: e.target.value })
-                      }
+                      onChange={(next) => setFormData({ ...formData, death_date: next })}
                       className="col-span-3"
                     />
                   </div>
@@ -749,22 +746,8 @@ export function FamilyMembersTable({
                     )}
                   </TableCell>
                   <TableCell>{member.gender ?? "-"}</TableCell>
-                  <TableCell>
-                    {member.birthday
-                      ? (() => {
-                          const [y, m, d] = member.birthday.split("-");
-                          return `${y}年${m}月${d}日`;
-                        })()
-                      : "-"}
-                  </TableCell>
-                  <TableCell>
-                    {member.death_date
-                      ? (() => {
-                          const [y, m, d] = member.death_date.split("-");
-                          return `${y}年${m}月${d}日`;
-                        })()
-                      : "-"}
-                  </TableCell>
+                  <TableCell>{formatDate(member.birthday)}</TableCell>
+                  <TableCell>{formatDate(member.death_date)}</TableCell>
                   <TableCell>{member.residence_place ?? "-"}</TableCell>
                   <TableCell>{member.official_position ?? "-"}</TableCell>
                   <TableCell>{member.is_alive ? "是" : "否"}</TableCell>

@@ -24,6 +24,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { batchCreateFamilyMembers, previewFamilyMembersImport } from "./actions";
 import { parseImportRows, type ImportFatherMatch, type ImportMemberInput } from "./member-import";
 import { useRuntimeConfig } from "@/components/runtime-config-provider";
+import { useCalendar } from "@/lib/calendar/calendar-context";
 
 interface ImportMembersDialogProps {
   onSuccess?: () => void;
@@ -31,6 +32,7 @@ interface ImportMembersDialogProps {
 
 export function ImportMembersDialog({ onSuccess }: ImportMembersDialogProps) {
   const { familySurname } = useRuntimeConfig();
+  const { formatDate } = useCalendar();
   const [isOpen, setIsOpen] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
   const [parsedData, setParsedData] = React.useState<ImportMemberInput[]>([]);
@@ -241,7 +243,7 @@ export function ImportMembersDialog({ onSuccess }: ImportMembersDialogProps) {
                           )}
                         </TableCell>
                         <TableCell>{member.gender}</TableCell>
-                        <TableCell>{member.birthday || "-"}</TableCell>
+                        <TableCell>{formatDate(member.birthday)}</TableCell>
                         <TableCell>{member.residence_place || "-"}</TableCell>
                       </TableRow>
                     ))}
