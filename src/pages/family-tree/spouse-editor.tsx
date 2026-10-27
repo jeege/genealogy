@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { Marriage, MarriageInput, MemberOption } from "@/lib/api/types";
+import { marriagePartner, marriedPartnerIds } from "./marriage-partner";
 
 const STATUS_LABELS: Record<string, string> = {
   married: "已婚",
@@ -58,8 +59,8 @@ export function SpouseEditor({
   const [localError, setLocalError] = React.useState<string | null>(null);
 
   const savedPartnerIds = React.useMemo(
-    () => new Set(marriages.map((item) => item.wife_id ?? item.husband_id)),
-    [marriages],
+    () => new Set(memberId === null ? [] : marriedPartnerIds(marriages, memberId)),
+    [marriages, memberId],
   );
 
   const candidates = React.useMemo(
@@ -134,15 +135,15 @@ export function SpouseEditor({
         ) : (
           <ul className="space-y-2">
             {marriages.map((marriage) => {
-              const partnerId = marriage.wife_id ?? marriage.husband_id;
-              const partner =
-                marriage.wife_id === partnerId ? marriage.wife_name : marriage.husband_name;
+              // 相对当前成员取「对方」，避免以妻子身份查看时显示自己。
+              const partner = marriagePartner(marriage, memberId!);
+              const partnerId = partner.id;
               return (
                 <li
                   key={marriage.id}
                   className="flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-sm"
                 >
-                  <span className="font-medium">{partner ?? `#${partnerId}`}</span>
+                  <span className="font-medium">{partner.name ?? `#${partnerId}`}</span>
                   <span className="text-muted-foreground">
                     {STATUS_LABELS[marriage.status] ?? marriage.status}
                   </span>
@@ -163,7 +164,7 @@ export function SpouseEditor({
                     className="ml-auto h-7 w-7 text-destructive"
                     disabled={busy}
                     onClick={() => removeMarriage(marriage.id)}
-                    aria-label={`解除与${partner ?? "配偶"}的关系`}
+                    aria-label={`解除与${partner.name ?? "配偶"}的关系`}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
