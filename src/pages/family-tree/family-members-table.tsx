@@ -97,7 +97,6 @@ export function FamilyMembersTable({
     gender: "",
     official_position: "",
     is_alive: true,
-    spouse: "",
     remarks: "",
     birthday: "",
     death_date: "",
@@ -109,12 +108,13 @@ export function FamilyMembersTable({
   // 判断是否为编辑模式
   const isEditMode = editingMember !== null;
 
-  // 关闭或重开弹窗后，忽略旧请求的响应并允许重新加载。
+  // 打开弹窗时加载成员选项（父亲 / 配偶下拉共用）。
+  // 已有选项时直接复用，避免每次打开都清空并重新请求——那会让下拉先空白再跳动。
   React.useEffect(() => {
     if (!isDialogOpen) return;
+    if (parentOptions.length > 0 && !parentLoadError) return;
     let cancelled = false;
     setIsLoadingParents(true);
-    setParentOptions([]);
     setParentLoadError(null);
     fetchAllMembersForSelect()
       .then(({ data, error }) => {
@@ -131,7 +131,7 @@ export function FamilyMembersTable({
         if (!cancelled) setIsLoadingParents(false);
       });
     return () => { cancelled = true; };
-  }, [isDialogOpen]);
+  }, [isDialogOpen, parentOptions.length, parentLoadError]);
 
   const updateUrlParams = (params: Record<string, string>) => {
     startTransition(() => {
@@ -213,7 +213,6 @@ export function FamilyMembersTable({
       gender: "",
       official_position: "",
       is_alive: true,
-      spouse: "",
       remarks: "",
       birthday: "",
       death_date: "",
@@ -244,7 +243,6 @@ export function FamilyMembersTable({
       gender: member.gender ?? "",
       official_position: member.official_position ?? "",
       is_alive: member.is_alive,
-      spouse: member.spouse ?? "",
       remarks: member.remarks ?? "",
       birthday: member.birthday ?? "",
       death_date: member.death_date ?? "",
@@ -288,7 +286,6 @@ export function FamilyMembersTable({
       gender: (formData.gender as "男" | "女") || null,
       official_position: formData.official_position || null,
       is_alive: formData.is_alive,
-      spouse: formData.spouse || null,
       remarks: formData.remarks || null,
       birthday: formData.birthday || null,
       death_date: (!formData.is_alive && formData.death_date) ? formData.death_date : null,
@@ -318,9 +315,9 @@ export function FamilyMembersTable({
   return (
     <div className="space-y-4">
       {/* 工具栏 */}
-      <div className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
         {/* 搜索 */}
-        <form onSubmit={handleSearch} className="flex gap-2 w-full lg:w-auto">
+        <form onSubmit={handleSearch} className="flex w-full gap-2 lg:w-auto">
           <Input
             placeholder="搜索姓名..."
             value={searchInput}
@@ -332,8 +329,8 @@ export function FamilyMembersTable({
           </Button>
         </form>
 
-        {/* 操作按钮 */}
-        <div className="flex gap-2 flex-wrap w-full lg:w-auto">
+        {/* 操作按钮：窄屏两列均分，宽屏一行铺开 */}
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap lg:w-auto">
           <ImportMembersDialog onSuccess={() => onRefresh?.()} />
 
           <GEDCOMImportDialog memberCount={totalCount} onSuccess={() => onRefresh?.()} />
@@ -344,7 +341,7 @@ export function FamilyMembersTable({
             ) : (
               <Download className="h-4 w-4 mr-2" />
             )}
-            <span className="hidden sm:inline">导出 GEDCOM</span>
+            <span className="truncate">导出 GEDCOM</span>
           </Button>
 
           <Button onClick={handleOpenAddDialog}>
@@ -354,6 +351,7 @@ export function FamilyMembersTable({
 
           <Button
             variant="destructive"
+            className="col-span-2 sm:col-span-1"
             onClick={handleDelete}
             disabled={selectedIds.size === 0 || isDeleting}
           >
@@ -366,42 +364,56 @@ export function FamilyMembersTable({
       {/* 新增/编辑弹窗 */}
       <Dialog open={isDialogOpen} onOpenChange={(open) => !open && handleCloseDialog()}>
         <DialogContent 
-          className="sm:max-w-[600px] max-h-[90vh] flex flex-col p-0 gap-0"
+          className={cn(
+            // 移动端：贴底全宽 + 顶部圆角，内容区自行滚动，避免小屏被软键盘顶出视野。
+            "top-auto bottom-0 max-h-[92svh] w-full max-w-full translate-y-0 rounded-b-none rounded-t-xl p-0",
+            "flex flex-col gap-0",
+            // 桌面端：回到居中的固定宽度弹窗。
+            "sm:top-[50%] sm:bottom-auto sm:max-h-[90vh] sm:max-w-[640px] sm:translate-y-[-50%] sm:rounded-lg",
+          )}
           onInteractOutside={(e) => e.preventDefault()}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          <DialogHeader className="px-6 py-4 border-b">
+          <DialogHeader className="border-b px-4 py-3 pr-12 sm:px-6 sm:py-4">
             <DialogTitle>{isEditMode ? "编辑成员" : "新增成员"}</DialogTitle>
             <DialogDescription>
               填写成员信息后点击保存
             </DialogDescription>
           </DialogHeader>
           
-          <form onSubmit={handleSubmitMember} className="flex flex-col flex-1 overflow-hidden">
-            <div className="flex-1 overflow-y-auto px-6 py-4">
-              <div className="grid gap-4">
-                {/* 姓名 */}
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="name" className="text-right">
-                    姓名 *
-                  </Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
-                    className="col-span-3"
-                    required
-                  />
-                </div>
+          <form onSubmit={handleSubmitMember} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+              <div className="space-y-6">
+                <FormSection title="基本信息">
+                  <FormField label="姓名" htmlFor="name" required>
+                    <Input
+                      id="name"
+                      value={formData.name}
+                      onChange={(e) =>
+                        setFormData({ ...formData, name: e.target.value })
+                      }
+                      required
+                    />
+                  </FormField>
 
-                {/* 父亲 */}
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="father_id" className="text-right">
-                    父亲
-                  </Label>
-                  <div className="col-span-3">
+                  <FormField label="性别" htmlFor="gender">
+                    <Select
+                      value={formData.gender}
+                      onValueChange={(value) =>
+                        setFormData({ ...formData, gender: value })
+                      }
+                    >
+                      <SelectTrigger id="gender" className="w-full">
+                        <SelectValue placeholder="选择性别" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="男">男</SelectItem>
+                        <SelectItem value="女">女</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+
+                  <FormField label="父亲" className="sm:col-span-2">
                     <FatherCombobox
                       value={formData.father_id}
                       options={parentOptions}
@@ -419,156 +431,105 @@ export function FamilyMembersTable({
                         });
                       }}
                     />
-                    {parentLoadError && (
-                      <p role="alert" className="mt-2 text-sm text-destructive">加载数据失败：{parentLoadError}</p>
+                    {parentLoadError ? (
+                      <p role="alert" className="text-sm text-destructive">加载数据失败：{parentLoadError}</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        选定父亲后会自动推算世代
+                      </p>
                     )}
-                  </div>
-                </div>
+                  </FormField>
 
-                {/* 世代 */}
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="generation" className="text-right">
-                    世代
-                  </Label>
-                  <Input
-                    id="generation"
-                    type="number"
-                    value={formData.generation}
-                    onChange={(e) =>
-                      setFormData({ ...formData, generation: e.target.value })
-                    }
-                    className="col-span-3"
-                    disabled={!!formData.father_id && formData.father_id !== "null"}
-                  />
-                </div>
+                  <FormField label="世代" htmlFor="generation">
+                    <Input
+                      id="generation"
+                      type="number"
+                      value={formData.generation}
+                      onChange={(e) =>
+                        setFormData({ ...formData, generation: e.target.value })
+                      }
+                      disabled={!!formData.father_id && formData.father_id !== "null"}
+                    />
+                  </FormField>
 
-                {/* 排行 */}
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="sibling_order" className="text-right">
-                    排行
-                  </Label>
-                  <Input
-                    id="sibling_order"
-                    type="number"
-                    value={formData.sibling_order}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        sibling_order: e.target.value,
-                      })
-                    }
-                    className="col-span-3"
-                  />
-                </div>
-
-                {/* 性别 */}
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="gender" className="text-right">
-                    性别
-                  </Label>
-                  <Select
-                    value={formData.gender}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, gender: value })
-                    }
-                  >
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="选择性别" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="男">男</SelectItem>
-                      <SelectItem value="女">女</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* 生日 */}
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="birthday" className="text-right">
-                    生日
-                  </Label>
-                  <DateField
-                    id="birthday"
-                    value={formData.birthday}
-                    onChange={(next) => setFormData({ ...formData, birthday: next })}
-                    className="col-span-3"
-                  />
-                </div>
-
-                {/* 居住地 */}
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="residence_place" className="text-right">
-                    居住地
-                  </Label>
-                  <Input
-                    id="residence_place"
-                    value={formData.residence_place}
-                    onChange={(e) =>
-                      setFormData({ ...formData, residence_place: e.target.value })
-                    }
-                    className="col-span-3"
-                  />
-                </div>
-
-                {/* 官职 */}
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="official_position" className="text-right">
-                    官职
-                  </Label>
-                  <Input
-                    id="official_position"
-                    value={formData.official_position}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        official_position: e.target.value,
-                      })
-                    }
-                    className="col-span-3"
-                  />
-                </div>
-
-                {/* 是否在世 */}
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="is_alive" className="text-right">
-                    是否在世
-                  </Label>
-                  <div className="col-span-3 flex items-center space-x-2">
-                    <Checkbox
-                      id="is_alive"
-                      checked={formData.is_alive}
-                      onCheckedChange={(checked) =>
+                  <FormField label="排行" htmlFor="sibling_order">
+                    <Input
+                      id="sibling_order"
+                      type="number"
+                      value={formData.sibling_order}
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
-                          is_alive: checked as boolean,
+                          sibling_order: e.target.value,
                         })
                       }
                     />
-                    <Label htmlFor="is_alive" className="font-normal">
-                      在世
-                    </Label>
-                  </div>
-                </div>
+                  </FormField>
 
-                {/* 卒年 (仅去世可选) */}
-                {!formData.is_alive && (
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="death_date" className="text-right">
-                      卒年
-                    </Label>
-                    <DateField
-                      id="death_date"
-                      value={formData.death_date}
-                      onChange={(next) => setFormData({ ...formData, death_date: next })}
-                      className="col-span-3"
+                  <FormField label="官职 / 头衔" htmlFor="official_position" className="sm:col-span-2">
+                    <Input
+                      id="official_position"
+                      value={formData.official_position}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          official_position: e.target.value,
+                        })
+                      }
                     />
-                  </div>
-                )}
+                  </FormField>
+                </FormSection>
 
-                {/* 配偶关系 */}
-                <div className="grid grid-cols-4 items-start gap-4">
-                  <Label className="text-right pt-2">配偶</Label>
-                  <div className="col-span-3">
+                <FormSection title="生卒与居所">
+                  <FormField label="是否在世" htmlFor="is_alive" className="sm:col-span-2">
+                    <div className="flex h-9 items-center space-x-2">
+                      <Checkbox
+                        id="is_alive"
+                        checked={formData.is_alive}
+                        onCheckedChange={(checked) =>
+                          setFormData({
+                            ...formData,
+                            is_alive: checked as boolean,
+                          })
+                        }
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        {formData.is_alive ? "在世" : "已故，可填写卒年"}
+                      </span>
+                    </div>
+                  </FormField>
+
+                  <FormField label="生日" htmlFor="birthday" className="sm:col-span-2">
+                    <DateField
+                      id="birthday"
+                      value={formData.birthday}
+                      onChange={(next) => setFormData({ ...formData, birthday: next })}
+                    />
+                  </FormField>
+
+                  {!formData.is_alive && (
+                    <FormField label="卒年" htmlFor="death_date" className="sm:col-span-2">
+                      <DateField
+                        id="death_date"
+                        value={formData.death_date}
+                        onChange={(next) => setFormData({ ...formData, death_date: next })}
+                      />
+                    </FormField>
+                  )}
+
+                  <FormField label="居住地" htmlFor="residence_place" className="sm:col-span-2">
+                    <Input
+                      id="residence_place"
+                      value={formData.residence_place}
+                      onChange={(e) =>
+                        setFormData({ ...formData, residence_place: e.target.value })
+                      }
+                    />
+                  </FormField>
+                </FormSection>
+
+                <FormSection title="配偶关系">
+                  <div className="sm:col-span-2 space-y-2">
                     <SpouseEditor
                       memberId={editingMember?.id ?? null}
                       gender={(formData.gender as "男" | "女") || null}
@@ -593,34 +554,14 @@ export function FamilyMembersTable({
                         return null;
                       }}
                     />
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      配偶需先登记为成员才能关联；旧数据中的配偶文本仍显示在「配偶备注」。
+                    <p className="text-xs text-muted-foreground">
+                      配偶需先登记为成员才能关联。
                     </p>
                   </div>
-                </div>
+                </FormSection>
 
-                {/* 配偶备注（自由文本，兼容旧数据） */}
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="spouse" className="text-right">
-                    配偶备注
-                  </Label>
-                  <Input
-                    id="spouse"
-                    placeholder="如：王氏（原配）"
-                    value={formData.spouse}
-                    onChange={(e) =>
-                      setFormData({ ...formData, spouse: e.target.value })
-                    }
-                    className="col-span-3"
-                  />
-                </div>
-
-                {/* 备注 / 生平事迹 */}
-                <div className="grid grid-cols-4 items-start gap-4">
-                  <Label htmlFor="remarks" className="text-right pt-2">
-                    生平事迹
-                  </Label>
-                  <div className="col-span-3">
+                <FormSection title="生平事迹">
+                  <div className="sm:col-span-2">
                     <RichTextEditor
                       value={formData.remarks}
                       onChange={(value) =>
@@ -629,11 +570,11 @@ export function FamilyMembersTable({
                       maxLength={500}
                     />
                   </div>
-                </div>
+                </FormSection>
               </div>
             </div>
             
-            <DialogFooter className="px-6 py-4 border-t mt-auto">
+            <DialogFooter className="mt-auto border-t px-4 py-3 sm:px-6 sm:py-4">
               <Button
                 type="button"
                 variant="outline"
@@ -650,8 +591,9 @@ export function FamilyMembersTable({
         </DialogContent>
       </Dialog>
 
-      {/* 表格 */}
-      <div className={cn("border rounded-lg transition-opacity duration-200", isPending && "opacity-60 pointer-events-none")}>
+      {/* 表格：宽屏表格视图 / 窄屏卡片视图，共用同一份数据与选中态 */}
+      <div className={cn("transition-opacity duration-200", isPending && "opacity-60 pointer-events-none")}>
+        <div className="hidden md:block border rounded-lg">
         <Table>
           <TableHeader>
             <TableRow>
@@ -681,7 +623,7 @@ export function FamilyMembersTable({
           <TableBody>
             {initialData.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={14} className="h-24 text-center">
+                <TableCell colSpan={15} className="h-24 text-center">
                   暂无数据
                 </TableCell>
               </TableRow>
@@ -776,12 +718,63 @@ export function FamilyMembersTable({
             )}
           </TableBody>
         </Table>
+        </div>
+
+        {/* 窄屏卡片视图：避免横向滚动查表 */}
+        <div className="md:hidden space-y-2">
+          {initialData.length === 0 ? (
+            <div className="rounded-lg border py-12 text-center text-sm text-muted-foreground">
+              暂无数据
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-2 px-1">
+                <Checkbox
+                  checked={allSelected}
+                  onCheckedChange={handleSelectAll}
+                  aria-label="全选"
+                />
+                <span className="text-sm text-muted-foreground">
+                  全选本页（{initialData.length} 条）
+                </span>
+              </div>
+              {initialData.map((member) => (
+                <MemberCard
+                  key={member.id}
+                  member={member}
+                  selected={selectedIds.has(member.id)}
+                  onSelect={(checked) => handleSelectOne(member.id, checked)}
+                  onOpen={() => handleOpenEditDialog(member)}
+                  onOpenFather={
+                    member.father_id && member.father_name
+                      ? async () => {
+                          if (!member.father_id) return;
+                          setLoadingFatherId(member.father_id);
+                          try {
+                            const fatherData = await fetchMemberById(member.father_id);
+                            if (fatherData) handleOpenEditDialog(fatherData);
+                          } finally {
+                            setLoadingFatherId(null);
+                          }
+                        }
+                      : undefined
+                  }
+                  isLoadingFather={loadingFatherId === member.father_id}
+                  formatDate={formatDate}
+                  onOpenBiography={
+                    member.remarks ? () => setBiographyMember(member) : undefined
+                  }
+                />
+              ))}
+            </>
+          )}
+        </div>
       </div>
 
       {/* 分页 */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-0">
+      <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
-          共 {totalCount} 条记录，第 {currentPage} / {totalPages || 1} 页
+          共 {totalCount} 条 · {currentPage}/{totalPages || 1} 页
         </p>
         <div className="flex items-center gap-2">
           <Button
@@ -789,17 +782,19 @@ export function FamilyMembersTable({
             size="sm"
             onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage <= 1 || isPending}
+            aria-label="上一页"
           >
             <ChevronLeft className="h-4 w-4" />
-            上一页
+            <span className="hidden sm:inline">上一页</span>
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={() => handlePageChange(currentPage + 1)}
             disabled={currentPage >= totalPages || isPending}
+            aria-label="下一页"
           >
-            下一页
+            <span className="hidden sm:inline">下一页</span>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
@@ -826,11 +821,163 @@ const MARRIAGE_STATUS_LABELS: Record<string, string> = {
   widowed: "（丧偶）",
 };
 
-/** 列表单元格：结构化配偶优先，缺失时回退到文本备注。 */
+/** 列表单元格：只展示已登记的配偶，未登记时显示占位。 */
 function formatSpouses(member: FamilyMember): string {
   const linked = (member.spouses ?? []).map(
     (spouse) => `${spouse.name}${MARRIAGE_STATUS_LABELS[spouse.status] ?? ""}`,
   );
-  if (linked.length > 0) return linked.join("、");
-  return member.spouse ?? "-";
+  return linked.length > 0 ? linked.join("、") : "-";
+}
+
+/** 窄屏成员卡片：把表格的一行折叠成一张卡片，避免横向滚动。 */
+function MemberCard({
+  member,
+  selected,
+  onSelect,
+  onOpen,
+  onOpenFather,
+  isLoadingFather,
+  formatDate,
+  onOpenBiography,
+}: {
+  member: FamilyMember;
+  selected: boolean;
+  onSelect: (checked: boolean) => void;
+  onOpen: () => void;
+  onOpenFather?: () => void;
+  isLoadingFather: boolean;
+  formatDate: (iso: string | null | undefined, fallback?: string) => string;
+  onOpenBiography?: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-lg border p-3 space-y-2",
+        selected && "bg-muted/50 border-primary/40",
+      )}
+    >
+      <div className="flex items-start gap-2">
+        <Checkbox
+          checked={selected}
+          onCheckedChange={(checked) => onSelect(checked as boolean)}
+          aria-label={`选择 ${member.name}`}
+          className="mt-1"
+        />
+        <div className="min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={onOpen}
+            className="text-left font-medium text-primary hover:underline"
+          >
+            {member.name}
+          </button>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="font-mono">#{member.id}</span>
+            {member.gender && <span>{member.gender}</span>}
+            {member.generation !== null && <span>第{member.generation}世</span>}
+            {member.sibling_order !== null && <span>行{member.sibling_order}</span>}
+            <span>{member.is_alive ? "在世" : "已故"}</span>
+          </div>
+        </div>
+      </div>
+
+      <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+        <div className="min-w-0">
+          <dt className="text-muted-foreground">父亲</dt>
+          <dd className="truncate">
+            {onOpenFather && member.father_name ? (
+              <button
+                type="button"
+                disabled={isLoadingFather}
+                onClick={onOpenFather}
+                className={cn(
+                  "text-primary hover:underline",
+                  isLoadingFather && "opacity-70 cursor-wait",
+                )}
+              >
+                {member.father_name}
+              </button>
+            ) : (
+              "-"
+            )}
+          </dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-muted-foreground">配偶</dt>
+          <dd className="truncate">{formatSpouses(member)}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-muted-foreground">生辰</dt>
+          <dd className="truncate">{formatDate(member.birthday)}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-muted-foreground">卒年</dt>
+          <dd className="truncate">{formatDate(member.death_date)}</dd>
+        </div>
+        <div className="min-w-0 col-span-2">
+          <dt className="text-muted-foreground">居住地</dt>
+          <dd className="truncate">{member.residence_place || "-"}</dd>
+        </div>
+        {member.official_position && (
+          <div className="min-w-0 col-span-2">
+            <dt className="text-muted-foreground">官职</dt>
+            <dd className="truncate">{member.official_position}</dd>
+          </div>
+        )}
+      </dl>
+
+      <div className="flex items-center justify-between gap-2 border-t pt-2">
+        <span className="text-[11px] text-muted-foreground">
+          {new Date(member.updated_at).toLocaleString("zh-CN", {
+            timeZone: "Asia/Shanghai",
+          })}
+        </span>
+        {onOpenBiography && (
+          <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={onOpenBiography}>
+            查看生平
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** 表单分区：标题 + 响应式两列栅格。 */function FormSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <h3 className="text-sm font-semibold text-muted-foreground">{title}</h3>
+      <div className="grid gap-4 sm:grid-cols-2">{children}</div>
+    </section>
+  );
+}
+
+/** 表单字段：标签在上、控件在下，避免长标签挤压输入框。 */
+function FormField({
+  label,
+  htmlFor,
+  required,
+  className,
+  children,
+}: {
+  label: string;
+  htmlFor?: string;
+  required?: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={cn("space-y-1.5", className)}>
+      <Label htmlFor={htmlFor} className="text-sm font-medium">
+        {label}
+        {required && <span className="ml-0.5 text-destructive">*</span>}
+      </Label>
+      {children}
+    </div>
+  );
 }

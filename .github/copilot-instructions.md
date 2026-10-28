@@ -96,7 +96,7 @@ residence_place, updated_at
   `PUT|DELETE /api/marriages/{id}`。
 - 新增/更新成员可传 `spouse_ids`；**不传表示不改变婚姻**，空数组表示解除全部。
 - 前端：`src/pages/family-tree/spouse-editor.tsx`；成员查询会附带 `spouses` 摘要。
-- `family_members.spouse` 是配偶备注文本，不是结构化配偶。
+- 配偶关系只由 `marriages` 表达；成员表上已无自由文本的配偶字段。
 
 ### GEDCOM
 

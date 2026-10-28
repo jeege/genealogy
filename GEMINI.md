@@ -130,9 +130,15 @@ useEffect(() => { /* 重新拉取 */ }, [page, search, version]);
     - **字辈趋势**: 自动统计姓名中第二个字（通常为字辈）的出现频率。
 
 ### 公历/农历 (`src/lib/calendar/`)
-- 存储永远是公历 ISO 日期；农历只是展示与输入层，基于 `Intl` 中国历法，不新增依赖。
+- 存储永远是公历 ISO 日期；农历只是展示与输入层，基于 `Intl` 中国历法，不新增依赖。页面默认以农历展示，用户显式切换为公历后由 localStorage 记住选择。
 - `CalendarProvider` 提供 `mode` 与 `formatDate`；顶栏 `CalendarSwitcher` 切换。
-- `DateField` 在农历模式下渲染年/月（含闰月）/日下拉，换算后回写 ISO 字符串。
+- `DateField` 基于 shadcn Date Picker（react-day-picker v10 + Popover），公历/农历共用同一个日历弹层：
+  格子为「公历数字 + 农历日/节日」双行，输入框文案随历法切换，写回始终为公历 ISO。
+- 弹层必须 Portal 到最近的 `DialogContent`：Radix Dialog 的 react-remove-scroll 会在 document
+  捕获阶段拦截 wheel，只放行 DialogContent 内部的滚动，挂到 body 会导致弹层内列表滚轮失灵。
+- 年/月下拉共用 `SelectList`（固定高度原生滚动，不接管 wheel）；年份初始 ±50 年、滚到边界每次再扩
+  50 年（上限公元前 2000 ~ 公元 9999），顶部插入后在 layout 阶段补偿 scrollTop。
+  展开状态与年份窗口放模块级——react-day-picker 重建 MonthCaption 子树会卸载组件。
 - 月份名兼容 Intl 的「十一月」与民间「冬月」；`fromLunar` 需按 relatedYear 过滤，避免跨年腊月混入。
 
 ### 配偶关系 (`marriages`)
@@ -140,12 +146,12 @@ useEffect(() => { /* 重新拉取 */ }, [page, search, version]);
   `married_on`/`divorced_on` 与原始文本列、`note`。
 - 一位成员可有多段婚姻；同一对成员唯一；删除成员级联删除婚姻。
 - 成员查询会批量附带 `spouses` 摘要（`ListSpouseLinks`），避免 N+1。
-- `family_members.spouse` 仅作配偶备注文本，兼容旧数据与 CSV 导入。
+- `family_members.spouse` 文本备注列已移除（迁移 `005_drop_member_spouse.sql`），配偶只能通过 `marriages` 表达。
 - 编辑入口 `src/pages/family-tree/spouse-editor.tsx`；API 见 `POST /api/marriages` 等。
 
 ### GEDCOM 导入导出 (`backend/internal/gedcom/`)
 - 解析 GEDCOM 5.5.1 子集：`INDI`、`FAM`、`NAME`/`SEX`/`BIRT`/`DEAT`/`NOTE`/`OCCU`/`RESI`，
-  扩展标签 `_GENC`/`_SIBO`/`_SPO`/`_ALIV`；`HUSB`/`WIFE` + `MARR`/`DIV` 映射为婚姻记录。
+  扩展标签 `_GENC`/`_SIBO`/`_ALIV`（旧版 `_SPO` 仅识别并忽略）；`HUSB`/`WIFE` + `MARR`/`DIV` 映射为婚姻记录。
 - 导入时由父亲链推导世代，同一 `FAM` 内 `CHIL` 顺序作为排行。
 - 日期原始文本保留在 `birth_date_raw`/`death_date_raw`，同时解析 ISO 日期。
 - 自动识别 UTF-8 与 GB18030；API 见 `GET /api/family-members/gedcom` 等。

@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Loader2, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { DateField } from "@/components/date-field";
 import { cn } from "@/lib/utils";
 import type { Marriage, MarriageInput, MemberOption } from "@/lib/api/types";
 import { marriagePartner, marriedPartnerIds } from "./marriage-partner";
@@ -195,54 +196,67 @@ export function SpouseEditor({
         </ul>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-2">
-        <Select value={selectedId} onValueChange={setSelectedId} disabled={isLoadingOptions || busy}>
-          <SelectTrigger className="flex-1">
-            <SelectValue placeholder={isLoadingOptions ? "加载成员..." : "选择配偶成员"} />
-          </SelectTrigger>
-          <SelectContent>
-            {candidates.length === 0 ? (
-              <div className="px-3 py-2 text-sm text-muted-foreground">没有可选择的成员</div>
-            ) : (
-              candidates.map((option) => (
-                <SelectItem key={option.id} value={String(option.id)}>
-                  {option.name}
-                  {option.generation !== null ? `（第${option.generation}世）` : ""}
-                </SelectItem>
-              ))
-            )}
-          </SelectContent>
-        </Select>
-        {memberId !== null && (
-          <Select
-            value={status ?? "married"}
-            onValueChange={(value) => setStatus(value as MarriageInput["status"])}
-            disabled={busy}
-          >
-            <SelectTrigger className="sm:w-28">
-              <SelectValue />
+      <div className="space-y-2 rounded-md border border-dashed p-3">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Select value={selectedId} onValueChange={setSelectedId} disabled={isLoadingOptions || busy}>
+            <SelectTrigger className="flex-1">
+              <SelectValue placeholder={isLoadingOptions ? "加载成员..." : "选择配偶成员"} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="married">已婚</SelectItem>
-              <SelectItem value="divorced">离异</SelectItem>
-              <SelectItem value="widowed">丧偶</SelectItem>
+              {candidates.length === 0 ? (
+                <div className="px-3 py-2 text-sm text-muted-foreground">没有可选择的成员</div>
+              ) : (
+                candidates.map((option) => (
+                  <SelectItem key={option.id} value={String(option.id)}>
+                    {option.name}
+                    {option.generation !== null ? `（第${option.generation}世）` : ""}
+                  </SelectItem>
+                ))
+              )}
             </SelectContent>
           </Select>
-        )}
-        {memberId !== null && (
-          <Input
-            type="date"
-            value={marriedOn}
-            onChange={(event) => setMarriedOn(event.target.value)}
-            className="sm:w-40"
-            aria-label="结婚日期"
-            disabled={busy}
-          />
-        )}
-        <Button type="button" variant="outline" onClick={submitMarriage} disabled={!selectedId || busy}>
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          <span className="ml-1">添加</span>
-        </Button>
+          {memberId !== null && (
+            <Select
+              value={status ?? "married"}
+              onValueChange={(value) => setStatus(value as MarriageInput["status"])}
+              disabled={busy}
+            >
+              <SelectTrigger className="sm:w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="married">已婚</SelectItem>
+                <SelectItem value="divorced">离异</SelectItem>
+                <SelectItem value="widowed">丧偶</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          {memberId !== null && (
+            <div className="flex-1 space-y-1.5">
+              <Label htmlFor="marriage-date" className="text-xs text-muted-foreground">
+                结婚日期
+              </Label>
+              <DateField
+                id="marriage-date"
+                value={marriedOn}
+                onChange={setMarriedOn}
+                disabled={busy}
+              />
+            </div>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={submitMarriage}
+            disabled={!selectedId || busy}
+            className="sm:w-24"
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            <span className="ml-1">{memberId === null ? "暂存" : "添加"}</span>
+          </Button>
+        </div>
       </div>
 
       {displayError && (

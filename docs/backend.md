@@ -111,8 +111,8 @@
 
 ### 配偶关系
 
-`family_members.spouse` 文本字段保留为「配偶备注」，用于历史数据与 Excel/CSV 导入；
-结构化配偶关系存放在 `marriages` 表：
+配偶关系只存放在 `marriages` 表；成员上不再有自由文本的配偶字段
+（`family_members.spouse` 已在迁移 `005_drop_member_spouse.sql` 中删除）：
 
 | 字段 | 说明 |
 | --- | --- |
@@ -150,7 +150,7 @@
 | 世系关系 | `FAM` 的 `HUSB`/`WIFE`/`CHIL`、`FAMC` |
 | 婚姻 | `MARR`/`DIV` 的 `DATE`，映射为 `marriages` 记录 |
 | 其他档案 | `OCCU`（官职）、`RESI`（居住地）、`NOTE`（生平） |
-| 本系统扩展 | `_GENC`（世代）、`_SIBO`（排行）、`_SPO`（配偶文本）、`_ALIV`（在世） |
+| 本系统扩展 | `_GENC`（世代）、`_SIBO`（排行）、`_ALIV`（在世）；旧版 `_SPO`（配偶文本）仅被识别并忽略 |
 
 ### 导入行为
 
