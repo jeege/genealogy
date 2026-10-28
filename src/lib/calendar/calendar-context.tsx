@@ -28,13 +28,13 @@ function lunarDayText(day: number): string {
 }
 
 /**
- * 全站历法视图。默认公历；切换为农历后，所有日期展示自动改为农历，
- * 但底层存储与接口始终是公历 ISO 日期。
+ * 全站历法视图。默认农历；用户显式切换为公历后记住该选择。
+ * 无论哪种展示，底层存储与接口始终是公历 ISO 日期。
  */
 export function CalendarProvider({ children }: { children: React.ReactNode }) {
   const [mode, setModeState] = useState<CalendarMode>(() => {
-    if (typeof window === "undefined") return "solar";
-    return window.localStorage.getItem(STORAGE_KEY) === "lunar" ? "lunar" : "solar";
+    if (typeof window === "undefined") return "lunar";
+    return window.localStorage.getItem(STORAGE_KEY) === "solar" ? "solar" : "lunar";
   });
 
   useEffect(() => {
