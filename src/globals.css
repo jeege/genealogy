@@ -89,3 +89,79 @@
 .animate-brush-reveal {
   animation: brush-reveal 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
+/* react-day-picker 基础布局：shadcn 的 calendar 通过 classNames 覆盖外观，
+   但网格、表格与下拉的默认排版仍依赖这些最小规则。 */
+.rdp-root {
+  --cell-size: 2.75rem;
+  --rdp-accent-color: hsl(var(--primary));
+  --rdp-accent-background-color: hsl(var(--accent));
+  --rdp-day-height: var(--cell-size);
+  --rdp-day-width: var(--cell-size);
+  --rdp-day_button-height: calc(var(--cell-size) - 2px);
+  --rdp-day_button-width: calc(var(--cell-size) - 2px);
+  --rdp-day_button-border-radius: var(--radius);
+  --rdp-selected-border: none;
+  --rdp-disabled-opacity: 0.4;
+  --rdp-outside-opacity: 0.4;
+  --rdp-today-color: hsl(var(--primary));
+  --rdp-dropdown-gap: 0.5rem;
+  --rdp-months-gap: 1rem;
+  --rdp-nav_button-disabled-opacity: 0.4;
+  --rdp-nav_button-height: 2rem;
+  --rdp-nav_button-width: 2rem;
+  --rdp-nav-height: 2.5rem;
+  --rdp-weekday-opacity: 0.7;
+  --rdp-weekday-padding: 0.5rem 0;
+  --rdp-week_opacity: 1;
+  --rdp-weeks_before_enter_transform: none;
+  --rdp-weeks_after_enter_transform: none;
+}
+
+.rdp-root .rdp-months {
+  position: relative;
+}
+
+.rdp-root .rdp-month_grid {
+  border-collapse: collapse;
+}
+
+.rdp-root .rdp-weekdays,
+.rdp-root .rdp-week {
+  display: flex;
+  width: 100%;
+}
+
+.rdp-root .rdp-weekday,
+.rdp-root .rdp-day {
+  flex: 1 1 0;
+  width: var(--cell-size);
+  min-width: var(--cell-size);
+}
+
+.rdp-root .rdp-day {
+  height: var(--cell-size);
+}
+
+.rdp-root .rdp-caption_label,
+.rdp-root .rdp-dropdown {
+  font-size: 0.875rem;
+}
+
+.rdp-root .rdp-dropdown {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  font-weight: 500;
+}
+
+.rdp-root .rdp-dropdown_root {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.25rem;
+}
+
+.rdp-root .rdp-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}

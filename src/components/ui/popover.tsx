@@ -19,10 +19,21 @@ function PopoverContent({
   className,
   align = "center",
   sideOffset = 4,
+  /**
+   * 挂载容器，默认 `document.body`。
+   *
+   * 当 Popover 位于 Radix Dialog 内时，必须传 DialogContent 作为容器：
+   * Dialog 用 react-remove-scroll 锁定背景滚动，它在 document 捕获阶段拦 wheel，
+   * 只放行「在 DialogContent 内部」的滚动。默认 Portal 到 body 会落在白名单外，
+   * 导致弹层内部的列表无法用滚轮滚动（拖滚动条却可以）。
+   */
+  container,
   ...props
-}: React.ComponentProps<typeof PopoverPrimitive.Content>) {
+}: React.ComponentProps<typeof PopoverPrimitive.Content> & {
+  container?: React.ComponentProps<typeof PopoverPrimitive.Portal>["container"]
+}) {
   return (
-    <PopoverPrimitive.Portal>
+    <PopoverPrimitive.Portal container={container}>
       <PopoverPrimitive.Content
         data-slot="popover-content"
         align={align}
