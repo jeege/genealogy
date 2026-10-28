@@ -72,3 +72,37 @@ test("格式化包含干支与闰月信息", () => {
   assert.equal(lunar.formatLunar(lunar.toLunar("2023-03-22")), "癸卯年闰二月初一");
   assert.match(lunar.formatISODateAsLunar("2024-02-10"), /甲辰年正月初一（2024-02-10）/);
 });
+
+test("与 lunar-javascript（寿星天文历）的结果一致", () => {
+  // 期望值来自 6tail/lunar-javascript 的 Lunar.fromYmd(...).getSolar()，
+  // 作为独立数据源交叉校验本项目基于 Intl 的实现。
+  const cases = [
+    { lunar: { year: 2024, month: 1, leap: false, day: 1 }, solar: "2024-02-10" },
+    { lunar: { year: 2024, month: 2, leap: false, day: 10 }, solar: "2024-03-19" },
+    { lunar: { year: 2023, month: 2, leap: true, day: 1 }, solar: "2023-03-22" },
+    { lunar: { year: 2023, month: 12, leap: false, day: 30 }, solar: "2024-02-09" },
+    { lunar: { year: 1950, month: 1, leap: false, day: 15 }, solar: "1950-03-03" },
+    { lunar: { year: 1900, month: 8, leap: false, day: 15 }, solar: "1900-09-08" },
+    // 2033 年被广泛讨论的「闰十一月」争议年份：
+    // 该年有闰冬月（闰十一月），且闰月排在同名月之后。
+    { lunar: { year: 2033, month: 1, leap: false, day: 1 }, solar: "2033-01-31" },
+    { lunar: { year: 2033, month: 11, leap: true, day: 1 }, solar: "2033-12-22" },
+  ];
+  for (const { lunar: input, solar } of cases) {
+    assert.equal(lunar.fromLunar(input), solar, `${input.year}-${input.month}${input.leap ? "L" : ""}-${input.day} 与参考实现不一致`);
+  }
+});
+
+test("月份天数与 lunar-javascript 的 LunarMonth dayCount 一致", () => {
+  // 2023 年各月天数（含闰二月）来自参考实现。
+  const expected2023 = [29, 30, 29, 29, 30, 30, 29, 30, 30, 29, 30, 29, 30];
+  assert.deepEqual(
+    lunar.lunarYearIndex(2023).months.map((m) => m.dayCount),
+    expected2023,
+  );
+  // 整年天数 384 天（闰年 13 个月）。
+  assert.equal(
+    lunar.lunarYearIndex(2023).months.reduce((sum, m) => sum + m.dayCount, 0),
+    384,
+  );
+});
