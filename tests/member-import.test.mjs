@@ -13,7 +13,6 @@ test("中文表头映射为后端导入字段", () => {
     性别: "女",
     官职: "进士",
     是否在世: "否",
-    配偶: "王氏",
     生平事迹: "字某某",
     生日: "1990-01-01",
     居住地: "某地",
@@ -25,7 +24,6 @@ test("中文表头映射为后端导入字段", () => {
   assert.equal(member.gender, "女");
   assert.equal(member.official_position, "进士");
   assert.equal(member.is_alive, false);
-  assert.equal(member.spouse, "王氏");
   assert.equal(member.remarks, "字某某");
   assert.equal(member.birthday, "1990-01-01");
   assert.equal(member.residence_place, "某地");

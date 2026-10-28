@@ -22,7 +22,6 @@ type memberPayload struct {
 	Gender           *string `json:"gender"`
 	OfficialPosition *string `json:"official_position"`
 	IsAlive          *bool   `json:"is_alive"`
-	Spouse           *string `json:"spouse"`
 	Remarks          *string `json:"remarks"`
 	Birthday         *string `json:"birthday"`
 	DeathDate        *string `json:"death_date"`
@@ -80,7 +79,6 @@ func (p memberPayload) toInput() (domain.MemberInput, error) {
 		Gender:           gender,
 		OfficialPosition: trimmed(p.OfficialPosition),
 		IsAlive:          p.IsAlive,
-		Spouse:           trimmed(p.Spouse),
 		Remarks:          trimmed(p.Remarks),
 		Birthday:         birthday,
 		DeathDate:        deathDate,

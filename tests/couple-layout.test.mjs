@@ -16,7 +16,6 @@ function member(id, overrides = {}) {
     gender: "男",
     official_position: null,
     is_alive: true,
-    spouse: null,
     remarks: null,
     birthday: null,
     death_date: null,
@@ -75,14 +74,15 @@ test("配偶带来的子女并入合并节点，连线不丢", () => {
   assert.deepEqual(merged.children.sort(), [3, 4]);
 });
 
-test("没有结构化配偶时按姓名回退匹配", () => {
-  const husband = member(1, { spouse: "成员2" });
+test("没有结构化配偶时不会仅凭姓名合并", () => {
+  // 配偶文本备注字段已移除，只有 marriages 记录才算配偶关系。
+  const husband = member(1);
   const wife = member(2, { name: "成员2", gender: "女" });
   const members = [husband, wife];
 
   const units = buildCoupleUnits(members, childMap(members));
-  assert.equal(units.length, 1);
-  assert.deepEqual(units[0].partners.map((p) => p.id), [2]);
+  assert.equal(units.length, 2);
+  assert.equal(units.every((unit) => unit.partners.length === 0), true);
 });
 
 test("一位成员不会出现在两个合并节点中", () => {
@@ -187,10 +187,15 @@ test("多次婚姻：配偶之间不会互相抢占或重复并入", () => {
   assert.deepEqual(units[0].partners.map((p) => p.id), [2, 3]);
 });
 
-test("自由文本配偶备注支持多位（顿号/逗号分隔）", () => {
-  const husband = member(1, { spouse: "王氏、李氏" });
-  const wifeOne = member(2, { name: "王氏", gender: "女" });
-  const wifeTwo = member(3, { name: "李氏", gender: "女" });
+test("多次婚姻：登记多位配偶时全部合并", () => {
+  const husband = member(1, {
+    spouses: [
+      { marriage_id: 1, partner_id: 2, name: "王氏", status: "married" },
+      { marriage_id: 2, partner_id: 3, name: "李氏", status: "married" },
+    ],
+  });
+  const wifeOne = member(2, { name: "王氏", gender: "女", spouses: [{ marriage_id: 1, partner_id: 1, name: "成员1", status: "married" }] });
+  const wifeTwo = member(3, { name: "李氏", gender: "女", spouses: [{ marriage_id: 2, partner_id: 1, name: "成员1", status: "married" }] });
   const members = [husband, wifeOne, wifeTwo];
 
   const unit = buildCoupleUnits(members, childMap(members)).find((u) => u.primary.id === 1);

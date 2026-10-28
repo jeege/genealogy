@@ -137,7 +137,7 @@ export function MemberDetailDialog({
                                       : spouse.name,
                                 )
                                 .join("、")
-                            : member.spouse || "未记录"}
+                            : "未记录"}
                         </div>
                       </div>
                     </div>

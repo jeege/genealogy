@@ -34,14 +34,13 @@ type Member struct {
 	Gender           *string `json:"gender"`
 	OfficialPosition *string `json:"official_position"`
 	IsAlive          bool    `json:"is_alive"`
-	Spouse           *string `json:"spouse"`
 	Remarks          *string `json:"remarks"`
 	Birthday         *string `json:"birthday"`
 	DeathDate        *string `json:"death_date"`
 	BirthDateRaw     *string `json:"birth_date_raw"`
 	DeathDateRaw     *string `json:"death_date_raw"`
 	ResidencePlace   *string `json:"residence_place"`
-	// Spouses 是婚姻关系摘要，Spouse 字段是自由文本备注（兼容旧数据）。
+	// Spouses 是婚姻关系摘要；配偶只能通过 marriages 表表达，不再有自由文本备注。
 	Spouses   []SpouseLink `json:"spouses"`
 	UpdatedAt time.Time    `json:"updated_at"`
 }
@@ -55,7 +54,6 @@ type MemberInput struct {
 	Gender           *string
 	OfficialPosition *string
 	IsAlive          *bool
-	Spouse           *string
 	Remarks          *string
 	Birthday         *string
 	DeathDate        *string
@@ -103,7 +101,6 @@ type ImportMember struct {
 	Gender           *string `json:"gender"`
 	OfficialPosition *string `json:"official_position"`
 	IsAlive          *bool   `json:"is_alive"`
-	Spouse           *string `json:"spouse"`
 	Remarks          *string `json:"remarks"`
 	Birthday         *string `json:"birthday"`
 	ResidencePlace   *string `json:"residence_place"`
@@ -169,7 +166,6 @@ type GEDCOMMember struct {
 	Gender           *string    `json:"gender"`
 	Generation       *int       `json:"generation"`
 	SiblingOrder     *int       `json:"sibling_order"`
-	Spouse           *string    `json:"spouse"`
 	Remarks          *string    `json:"remarks"`
 	ResidencePlace   *string    `json:"residence_place"`
 	OfficialPosition *string    `json:"official_position"`

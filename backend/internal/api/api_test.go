@@ -367,14 +367,14 @@ func TestCreateMemberValidationAndSuccess(t *testing.T) {
 	server := testServer(t, authenticatedAuth(), members, fakePinger{})
 	payload := map[string]any{
 		"name": " 刘测试 ", "generation": 2, "father_id": 1, "gender": "男",
-		"is_alive": true, "birthday": "1990-01-01", "spouse": " 王氏 ",
+		"is_alive": true, "birthday": "1990-01-01", "remarks": " 字某某 ",
 	}
 	response := perform(t, server, http.MethodPost, "/api/family-members", payload, nil, authCookie())
 	if response.Code != http.StatusCreated {
 		t.Fatalf("新增失败：%d %s", response.Code, response.Body.String())
 	}
 	if captured.Name != "刘测试" || captured.Birthday == nil || *captured.Birthday != "1990-01-01" ||
-		captured.Spouse == nil || *captured.Spouse != "王氏" {
+		captured.Remarks == nil || *captured.Remarks != "字某某" {
 		t.Fatalf("输入清洗错误：%+v", captured)
 	}
 

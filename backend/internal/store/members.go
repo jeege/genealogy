@@ -12,7 +12,7 @@ import (
 
 const memberColumns = `
 	m.id, m.name, m.generation, m.sibling_order, m.father_id, f.name AS father_name,
-	m.gender, m.official_position, COALESCE(m.is_alive, true) AS is_alive, m.spouse, m.remarks,
+	m.gender, m.official_position, COALESCE(m.is_alive, true) AS is_alive, m.remarks,
 	m.birthday::text, m.death_date::text, m.birth_date_raw, m.death_date_raw,
 	m.residence_place, m.updated_at`
 
@@ -25,7 +25,7 @@ func scanMember(row pgx.Row) (domain.Member, error) {
 	err := row.Scan(
 		&member.ID, &member.Name, &member.Generation, &member.SiblingOrder,
 		&member.FatherID, &member.FatherName, &member.Gender, &member.OfficialPosition,
-		&member.IsAlive, &member.Spouse, &member.Remarks, &member.Birthday,
+		&member.IsAlive, &member.Remarks, &member.Birthday,
 		&member.DeathDate, &member.BirthDateRaw, &member.DeathDateRaw,
 		&member.ResidencePlace, &member.UpdatedAt,
 	)
@@ -223,12 +223,12 @@ func (s *Store) CreateMember(ctx context.Context, input domain.MemberInput) (dom
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO public.family_members
 			(name, generation, sibling_order, father_id, gender, official_position,
-			 is_alive, spouse, remarks, birthday, death_date, birth_date_raw, death_date_raw,
+			 is_alive, remarks, birthday, death_date, birth_date_raw, death_date_raw,
 			 residence_place)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::date, $11::date, $12, $13, $14)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::date, $10::date, $11, $12, $13)
 		RETURNING id`,
 		input.Name, input.Generation, input.SiblingOrder, input.FatherID, input.Gender,
-		input.OfficialPosition, isAlive, input.Spouse, input.Remarks, input.Birthday,
+		input.OfficialPosition, isAlive, input.Remarks, input.Birthday,
 		input.DeathDate, input.BirthDateRaw, input.DeathDateRaw, input.ResidencePlace,
 	).Scan(&id)
 	if err != nil {
@@ -247,24 +247,24 @@ func (s *Store) UpdateMember(ctx context.Context, id int64, input domain.MemberI
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE public.family_members SET
 			name = $2, generation = $3, sibling_order = $4, father_id = $5,
-			gender = $6, official_position = $7, is_alive = $8, spouse = $9,
-			remarks = $10,
+			gender = $6, official_position = $7, is_alive = $8,
+			remarks = $9,
 			birth_date_raw = CASE
-				WHEN $13::text IS NOT NULL THEN $13::text
-				WHEN $11::date IS DISTINCT FROM birthday THEN NULL
+				WHEN $12::text IS NOT NULL THEN $12::text
+				WHEN $10::date IS DISTINCT FROM birthday THEN NULL
 				ELSE birth_date_raw
 			END,
-			birthday = $11::date,
+			birthday = $10::date,
 			death_date_raw = CASE
-				WHEN $14::text IS NOT NULL THEN $14::text
-				WHEN $12::date IS DISTINCT FROM death_date THEN NULL
+				WHEN $13::text IS NOT NULL THEN $13::text
+				WHEN $11::date IS DISTINCT FROM death_date THEN NULL
 				ELSE death_date_raw
 			END,
-			death_date = $12::date,
-			residence_place = $15, updated_at = now()
+			death_date = $11::date,
+			residence_place = $14, updated_at = now()
 		WHERE id = $1`,
 		id, input.Name, input.Generation, input.SiblingOrder, input.FatherID, input.Gender,
-		input.OfficialPosition, isAlive, input.Spouse, input.Remarks, input.Birthday,
+		input.OfficialPosition, isAlive, input.Remarks, input.Birthday,
 		input.DeathDate, input.BirthDateRaw, input.DeathDateRaw, input.ResidencePlace,
 	)
 	if err != nil {

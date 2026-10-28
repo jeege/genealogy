@@ -20,7 +20,7 @@ function member(overrides = {}) {
     gender: "男",
     official_position: null,
     is_alive: true,
-    spouse: null,
+    spouses: [],
     remarks: null,
     birthday: null,
     death_date: null,

@@ -152,12 +152,12 @@ func insertMember(ctx context.Context, tx pgx.Tx, member domain.GEDCOMMember, im
 	err := tx.QueryRow(ctx, `
 		INSERT INTO public.family_members
 			(name, generation, sibling_order, father_id, gender, official_position,
-			 is_alive, spouse, remarks, birthday, death_date, birth_date_raw, death_date_raw,
+			 is_alive, remarks, birthday, death_date, birth_date_raw, death_date_raw,
 			 residence_place)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::date, $11::date, $12, $13, $14)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::date, $10::date, $11, $12, $13)
 		RETURNING id`,
 		name, member.Generation, member.SiblingOrder, fatherID, member.Gender,
-		member.OfficialPosition, isAlive, member.Spouse, member.Remarks,
+		member.OfficialPosition, isAlive, member.Remarks,
 		dateOrNil(member.Birth), dateOrNil(member.Death),
 		rawOrNil(member.Birth), rawOrNil(member.Death), member.ResidencePlace,
 	).Scan(&id)

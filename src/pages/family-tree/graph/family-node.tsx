@@ -138,11 +138,11 @@ function FamilyMemberNodeComponent({ data }: FamilyNodeProps) {
   const nodeData = data as FamilyNodeData;
   const partners = nodeData.partners ?? [];
   const hasPartners = partners.length > 0;
-  // 结构化配偶优先（可能多位），无关联成员时回退到文本备注。
+  // 配偶关系只来自结构化婚姻；没有登记配偶时不显示。
   const spouseLabel =
     nodeData.spouses && nodeData.spouses.length > 0
       ? nodeData.spouses.map((spouse) => spouse.name).join("、")
-      : nodeData.spouse;
+      : null;
 
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -268,7 +268,7 @@ function FamilyMemberNodeComponent({ data }: FamilyNodeProps) {
             {nodeData.name}
           </div>
 
-          {/* 配偶备注：只在没有可合并配偶时作为文本展示 */}
+          {/* 配偶摘要：仅在未与配偶合并为同一节点时展示 */}
           {spouseLabel && (
             <div className="flex items-center justify-center gap-0.5 w-full -mt-0.5 mb-0.5">
               <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap select-none">配:</span>

@@ -38,7 +38,6 @@ export function parseImportRows(rows: Record<string, unknown>[]): ImportMemberIn
       gender: gender === "男" || gender === "女" ? gender : null,
       official_position: text("官职"),
       is_alive: text("是否在世") !== "否",
-      spouse: text("配偶"),
       remarks: text("生平事迹") || text("备注"),
       birthday: text("生日"),
       residence_place: text("居住地"),

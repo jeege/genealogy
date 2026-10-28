@@ -74,19 +74,6 @@ func ParseTree(text string) (*ParsedTree, error) {
 				union.Status = "divorced"
 			}
 			unions = append(unions, union)
-			// 记录到个人，便于导出时还原已知配偶姓名。
-			if member, ok := byXref[husband]; ok && member.Spouse == nil {
-				if partner, ok := byXref[wife]; ok && partner.Name != "" {
-					name := partner.Name
-					member.Spouse = &name
-				}
-			}
-			if member, ok := byXref[wife]; ok && member.Spouse == nil {
-				if partner, ok := byXref[husband]; ok && partner.Name != "" {
-					name := partner.Name
-					member.Spouse = &name
-				}
-			}
 		}
 		childXrefs := make([]string, 0, 4)
 		for _, childNode := range children(family, "CHIL") {
@@ -261,7 +248,7 @@ func buildMember(individual *node, document *Document, unsupported map[string]in
 		member.IsAlive = &value
 	}
 
-	// 本系统扩展标签：世代、排行、配偶文本。
+	// 本系统扩展标签：世代、排行。
 	if generation := childValue(individual, "_GENC"); generation != "" {
 		if value, err := strconv.Atoi(generation); err == nil && value > 0 {
 			member.Generation = &value
@@ -271,9 +258,6 @@ func buildMember(individual *node, document *Document, unsupported map[string]in
 		if value, err := strconv.Atoi(order); err == nil && value >= 0 {
 			member.SiblingOrder = &value
 		}
-	}
-	if spouse := childValue(individual, "_SPO"); spouse != "" {
-		member.Spouse = &spouse
 	}
 	if place := childValue(individual, "RESI", "PLAC"); place != "" {
 		member.ResidencePlace = &place
@@ -301,6 +285,8 @@ func buildMember(individual *node, document *Document, unsupported map[string]in
 		member.Remarks = &text
 	}
 
+	// _SPO 是本系统旧版本导出的配偶文本标签；配偶现在只由 FAM 记录表达，
+	// 这里仅将其视为已知标签静默忽略，避免旧文件导入时产生无意义的告警。
 	for _, childNode := range individual.Child {
 		switch childNode.Tag {
 		case "NAME", "SEX", "BIRT", "DEAT", "NOTE", "OCCU", "RESI", "FAMC", "FAMS",
@@ -485,7 +471,6 @@ func ToMembers(tree *ParsedTree) []domain.Member {
 			Gender:           member.Gender,
 			OfficialPosition: member.OfficialPosition,
 			IsAlive:          isAlive,
-			Spouse:           member.Spouse,
 			Remarks:          member.Remarks,
 			Birthday:         member.Birth.ISO,
 			DeathDate:        member.Death.ISO,

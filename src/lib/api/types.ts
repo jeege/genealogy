@@ -16,7 +16,6 @@ export interface FamilyMember {
   gender: "男" | "女" | null;
   official_position: string | null;
   is_alive: boolean;
-  spouse: string | null;
   remarks: string | null;
   birthday: string | null;
   death_date: string | null;
@@ -48,11 +47,11 @@ export interface BiographyMember {
   birthday: string | null;
   death_date: string | null;
   is_alive: boolean;
-  spouse: string | null;
   official_position: string | null;
   residence_place: string | null;
   remarks: string;
   father_name: string | null;
+  spouses: SpouseLink[];
 }
 
 export interface MemberInput {
@@ -63,7 +62,6 @@ export interface MemberInput {
   gender?: "男" | "女" | null;
   official_position?: string | null;
   is_alive?: boolean;
-  spouse?: string | null;
   remarks?: string | null;
   birthday?: string | null;
   death_date?: string | null;
@@ -85,7 +83,6 @@ export interface ImportMemberInput {
   gender?: "男" | "女" | null;
   official_position?: string | null;
   is_alive?: boolean;
-  spouse?: string | null;
   remarks?: string | null;
   birthday?: string | null;
   residence_place?: string | null;

@@ -19,8 +19,7 @@ export interface CoupleUnit {
  *    来自不同父亲的入边；其余情况（典型的「娶入」婚姻）都合成一个节点。
  * 2. 一位成员最多出现在一个合并节点里，但主成员可以带多位配偶
  *    （多次婚姻、续弦等）。
- * 3. 优先使用结构化婚姻（spouses），没有结构化数据时回退到自由文本 spouse
- *    的姓名匹配。
+ * 3. 配偶关系只认结构化婚姻（spouses）；文本备注字段已移除，不再做姓名回退。
  */
 export function buildCoupleUnits(
   members: FamilyMemberNode[],
@@ -50,13 +49,6 @@ export function buildCoupleUnits(
     for (const link of member.spouses ?? []) {
       if (link.partner_id === null) continue;
       push(byId.get(link.partner_id));
-    }
-    // 回退：没有结构化配偶时，按姓名匹配自由文本备注（可能含多位，用、或,分隔）。
-    if (candidates.length === 0 && member.spouse) {
-      const names = member.spouse.split(/[、,，/]/).map((name) => name.trim()).filter(Boolean);
-      for (const name of names) {
-        push(members.find((other) => other.name === name));
-      }
     }
 
     for (const partner of candidates) {

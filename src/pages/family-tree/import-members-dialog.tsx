@@ -70,7 +70,6 @@ export function ImportMembersDialog({ onSuccess }: ImportMembersDialogProps) {
         性别: "男",
         官职: "",
         是否在世: "是",
-        配偶: "",
         生平事迹: "",
         生日: "1965-01-01",
         居住地: "某地",
@@ -83,7 +82,6 @@ export function ImportMembersDialog({ onSuccess }: ImportMembersDialogProps) {
         性别: "男",
         官职: "进士",
         是否在世: "是",
-        配偶: "王氏",
         生平事迹: "字某某",
         生日: "1990-01-01",
         居住地: "某地",
@@ -178,7 +176,7 @@ export function ImportMembersDialog({ onSuccess }: ImportMembersDialogProps) {
           <DialogDescription>
             请先下载模板，填写数据后上传。支持 Excel (.xlsx, .xls) 和 CSV 格式。
             父亲按姓名及上一世代匹配，可填写已有成员或同一文件中的成员。
-            「配偶」列为配偶姓名备注；结构化配偶关系请在导入后于成员编辑中维护。
+            配偶关系不随文件导入，请在导入后于成员编辑中登记。
           </DialogDescription>
         </DialogHeader>
 

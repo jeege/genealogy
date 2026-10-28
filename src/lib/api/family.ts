@@ -24,7 +24,6 @@ export interface FamilyMemberNode {
   gender: "男" | "女" | null;
   official_position: string | null;
   is_alive: boolean;
-  spouse: string | null;
   remarks: string | null;
   birthday: string | null;
   death_date: string | null;

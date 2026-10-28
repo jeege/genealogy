@@ -16,13 +16,13 @@ type ExportOptions struct {
 	FileName string
 	// Now 便于测试固定导出日期；为零值时使用当前时间。
 	Now time.Time
-	// Marriages 是结构化配偶关系；缺省时仅导出成员上的配偶文本备注。
+	// Marriages 是结构化配偶关系；配偶只由 FAM 记录导出。
 	Marriages []domain.Marriage
 }
 
 // Export 将成员序列化为 GEDCOM 5.5.1 文本（UTF-8，CRLF 行尾）。
-// 父子关系用 FAM + HUSB/CHIL 表达；配偶文本、世代与排行使用 _SPO/_GENC/_SIBO
-// 扩展标签，使导出结果可以无损导回本系统。
+// 父子关系与配偶关系用 FAM + HUSB/WIFE/CHIL 表达；世代与排行使用
+// _GENC/_SIBO 扩展标签，使导出结果可以无损导回本系统。
 func Export(members []domain.Member, options ExportOptions) string {
 	sorted := make([]domain.Member, len(members))
 	copy(sorted, members)
@@ -192,9 +192,7 @@ func writeIndividual(builder *strings.Builder, member domain.Member, byID map[in
 	if member.SiblingOrder != nil {
 		writeLine(builder, 1, "_SIBO", fmt.Sprintf("%d", *member.SiblingOrder))
 	}
-	if member.Spouse != nil && *member.Spouse != "" {
-		writeLine(builder, 1, "_SPO", escapeValue(*member.Spouse))
-	}
+	// 配偶只通过 FAM 的 HUSB/WIFE 表达，不再写旧版 _SPO 文本标签。
 	// 只有父亲确实在导出集合内时才写 FAMC，避免产生指向不存在记录的指针。
 	if father := member.FatherID; father != nil {
 		if _, ok := byID[*father]; ok {

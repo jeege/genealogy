@@ -220,8 +220,8 @@ export function GEDCOMImportDialog({ onSuccess, memberCount = 0 }: GEDCOMImportD
                       <TableCell>FAM 的 HUSB 与 CHIL，自动推导世代</TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell>生平、官职、配偶</TableCell>
-                      <TableCell>NOTE / OCCU / _SPO</TableCell>
+                      <TableCell>生平、官职</TableCell>
+                      <TableCell>NOTE / OCCU</TableCell>
                     </TableRow>
                   </TableBody>
                 </Table>

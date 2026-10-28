@@ -1,8 +1,9 @@
 // Package gedcom 实现 GEDCOM 5.5.1 的解析、导入映射与导出序列化。
 //
-// 支持范围：INDI/FAM 记录、NAME/Sex/BIRT/DEAT/NOTE/OCCU/RESI、FAMC/FAMS、
-// HUSB/WIFE/CHIL 关系，以及本系统扩展标签 _GENC/_SIBO/_SPO 用于世代、排行与
-// 配偶文本的往返保真。不支持多个配偶、事件来源、多媒体与 LDS 记录。
+// 支持范围：INDI/FAM 记录、NAME/SEX/BIRT/DEAT/NOTE/OCCU/RESI、FAMC/FAMS、
+// HUSB/WIFE/CHIL 关系，以及本系统扩展标签 _GENC/_SIBO 用于世代与排行。
+// 旧版本导出的 _SPO 配偶文本标签会被识别但不写入。
+// 不支持事件来源、多媒体与 LDS 记录。
 package gedcom
 
 import (

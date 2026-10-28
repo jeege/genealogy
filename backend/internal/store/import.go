@@ -155,21 +155,21 @@ func insertImportBatch(
 		if member.IsAlive != nil {
 			isAlive = *member.IsAlive
 		}
-		base := position * 11
+		base := position * 10
 		placeholders = append(placeholders, fmt.Sprintf(
-			"($%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d::date,$%d)",
-			base+1, base+2, base+3, base+4, base+5, base+6, base+7, base+8, base+9, base+10, base+11,
+			"($%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d::date,$%d)",
+			base+1, base+2, base+3, base+4, base+5, base+6, base+7, base+8, base+9, base+10,
 		))
 		args = append(args,
 			member.Name, member.Generation, member.SiblingOrder, fatherID, member.Gender,
-			member.OfficialPosition, isAlive, member.Spouse, member.Remarks, member.Birthday,
+			member.OfficialPosition, isAlive, member.Remarks, member.Birthday,
 			member.ResidencePlace,
 		)
 	}
 
 	query := `INSERT INTO public.family_members
 		(name, generation, sibling_order, father_id, gender, official_position,
-		 is_alive, spouse, remarks, birthday, residence_place)
+		 is_alive, remarks, birthday, residence_place)
 		VALUES ` + strings.Join(placeholders, ",") + `
 		RETURNING id, name, generation`
 
