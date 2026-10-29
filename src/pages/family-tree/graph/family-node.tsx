@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { Fragment, memo } from "react";
 import { Handle, Position } from "@xyflow/react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -235,14 +235,15 @@ function FamilyMemberNodeComponent({ data }: FamilyNodeProps) {
             <MemberBlock member={nodeData} />
           </div>
           {partners.map((partner) => (
-            <div key={partner.id} className="flex items-stretch min-w-0 flex-1">
-              {/* 连接符：细分隔线 + 单字标记，避免竖排两字显得拥挤 */}
-              <div className="flex flex-col items-center justify-center px-1.5 select-none">
+            <Fragment key={partner.id}>
+              {/* 连接符：独立一列夹在主成员与配偶之间，保证水平居中。
+                  之前它包在配偶列内部，会贴在配偶一侧而非两者正中。 */}
+              <div className="flex shrink-0 flex-col items-center justify-center px-1 select-none">
                 <span aria-hidden className="w-px flex-1 bg-border" />
                 <span className="my-1 text-[10px] text-muted-foreground/70 leading-none">配</span>
                 <span aria-hidden className="w-px flex-1 bg-border" />
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="min-w-0 flex-1">
                 <MemberBlock
                   member={partner}
                   compact
@@ -253,7 +254,7 @@ function FamilyMemberNodeComponent({ data }: FamilyNodeProps) {
                   }
                 />
               </div>
-            </div>
+            </Fragment>
           ))}
         </div>
       ) : (
