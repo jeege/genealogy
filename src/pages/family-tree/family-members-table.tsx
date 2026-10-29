@@ -48,6 +48,7 @@ import { RichTextViewer } from "@/components/rich-text/viewer";
 import { cn } from "@/lib/utils";
 import { useCalendar } from "@/lib/calendar/calendar-context";
 import { DateField } from "@/components/date-field";
+import { MemberPhotoEditor } from "./member-photo-editor";
 
 interface FamilyMembersTableProps {
   initialData: FamilyMember[];
@@ -364,15 +365,59 @@ export function FamilyMembersTable({
       {/* 新增/编辑弹窗 */}
       <Dialog open={isDialogOpen} onOpenChange={(open) => !open && handleCloseDialog()}>
         <DialogContent 
+          // 关闭默认的居中缩放动画，由下面的 className 按断点完整指定。
+          defaultAnimation={false}
           className={cn(
-            // 移动端：贴底全宽 + 顶部圆角，内容区自行滚动，避免小屏被软键盘顶出视野。
-            "top-auto bottom-0 max-h-[92svh] w-full max-w-full translate-y-0 rounded-b-none rounded-t-xl p-0",
-            "flex flex-col gap-0",
-            // 桌面端：回到居中的固定宽度弹窗。
-            "sm:top-[50%] sm:bottom-auto sm:max-h-[90vh] sm:max-w-[640px] sm:translate-y-[-50%] sm:rounded-lg",
+            // ---- 定位 ----
+            // 注意：不要用 translate 居中——tailwindcss-animate 的 @keyframes
+            // 会整体覆盖 transform，居中在动画期间失效，弹窗会从右下角开始。
+            // 基础组件用的是 `inset-0 + mx-auto/my-auto`，这里只覆盖尺寸与贴边。
+            //
+            // 移动端：贴底全宽 + 顶部圆角（抽屉观感），内容区自行滚动，
+            // 避免小屏被软键盘顶出视野。
+            // `mt-auto`（而非 transform）把弹窗推到底部，动画不会影响它。
+            "mb-0 mt-auto max-h-[92svh] w-full max-w-full rounded-b-none rounded-t-xl p-0",
+            // flex 列布局 + 内部滚动：h-fit 会依据内容收缩，
+            // 内容超长时受 max-h 约束，由里面的 overflow-y-auto 接管滚动。
+            "flex flex-col gap-0 overflow-hidden",
+            // 桌面端：恢复垂直居中与固定宽度（水平居中由基础组件负责）。
+            "sm:mb-auto sm:mt-auto sm:max-h-[90vh] sm:max-w-[640px] sm:rounded-lg",
+
+            // ---- 动画 ----
+            // 移动端：从底部滑入 / 滑出，类似抽屉。
+            "data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom",
+            // 桌面端：从中间放大出现、缩小消失。
+            "sm:data-[state=open]:slide-in-from-bottom-0 sm:data-[state=closed]:slide-out-to-bottom-0",
+            "sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:zoom-out-95",
+            // 抽屉滑动稍慢一些，观感更接近原生 bottom sheet；
+            // 桌面端收紧到 200ms。基础组件已带 duration-200，这里按断点覆盖。
+            "duration-300 sm:duration-200",
           )}
           onInteractOutside={(e) => e.preventDefault()}
-          onOpenAutoFocus={(e) => e.preventDefault()}
+          // 不要用 preventDefault() 阻止自动聚焦：
+          // 那会把焦点留在触发按钮（位于 #root 内），而 Radix 会给 #root 设
+          // aria-hidden，浏览器随即报
+          // "Blocked aria-hidden on an element because its descendant retained focus"。
+          // 改为聚焦弹窗容器本身：焦点进入弹窗（不再报警），
+          // 同时避免一打开就跳到第一个输入框。
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            // 焦点必须**进入弹窗**，否则留在 #root 里的触发按钮上，
+            // Radix 给 #root 设 aria-hidden 时就会报
+            // "Blocked aria-hidden ... descendant retained focus"。
+            //
+            // currentTarget 是 FocusScope 的容器（带 tabIndex=-1），可直接聚焦；
+            // 若它不可聚焦，退回到第一个可聚焦子元素。
+            const container = event.currentTarget as HTMLElement | null;
+            if (!container) return;
+            container.focus({ preventScroll: true });
+            if (document.activeElement === container) return;
+            container
+              .querySelector<HTMLElement>(
+                'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+              )
+              ?.focus({ preventScroll: true });
+          }}
         >
           <DialogHeader className="border-b px-4 py-3 pr-12 sm:px-6 sm:py-4">
             <DialogTitle>{isEditMode ? "编辑成员" : "新增成员"}</DialogTitle>
@@ -478,6 +523,12 @@ export function FamilyMembersTable({
                       }
                     />
                   </FormField>
+                </FormSection>
+
+                <FormSection title="照片">
+                  <div className="sm:col-span-2">
+                    <MemberPhotoEditor memberId={editingMember?.id ?? null} />
+                  </div>
                 </FormSection>
 
                 <FormSection title="生卒与居所">
