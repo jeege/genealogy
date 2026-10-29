@@ -1,0 +1,109 @@
+name: 发布 Release 二进制
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 可选的 Release 标签（例如 v0.1.0）；留空则创建草稿 Release
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-binary-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+        exclude:
+          - goos: linux
+            goarch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 缓存 Go 模块
+        uses: actions/cache@v4
+        with:
+          path: .cache/go-mod
+          key: ${{ runner.os }}-go-mod-${{ hashFiles('backend/go.sum') }}
+
+      - name: 构建二进制
+        working-directory: backend
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+          GOCACHE: ${{ runner.temp }}/go-build
+        run: |
+          OUT="genealogy-server-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            OUT="${OUT}.exe"
+          fi
+          go build -trimpath -ldflags "-s -w" -o "dist/$OUT" ./cmd/server
+
+      - name: 压缩二进制
+        working-directory: backend
+        run: |
+          bin="genealogy-server-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            tar -czf "dist/${bin}.zip" -C "dist" "genealogy-server-${{ matrix.goos }}-${{ matrix.goarch }}.exe"
+          else
+            tar -czf "dist/${bin}.tar.gz" -C "dist" "${bin}"
+          fi
+
+      - name: 上传工件
+        uses: actions/upload-artifact@v4
+        with:
+          name: genealogy-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: backend/dist/genealogy-server-*
+          if-no-files-found: error
+
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      draft: ${{ steps.tag.outputs.draft }}
+    steps:
+      - name: 计算标签
+        id: tag
+        run: |
+          if [ "${{ inputs.tag }}" != "" ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+            echo "draft=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            echo "draft=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=pure-genealogy-${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+            echo "draft=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    needs: [build, meta]
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 下载所有工件
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.meta.outputs.tag }}
+          draft: ${{ needs.meta.outputs.draft }}
+          generate_release_notes: true
+          files: |
+            artifacts/*
