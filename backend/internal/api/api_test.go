@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"github.com/yunfengsa/pure-genealogy/backend/internal/config"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/domain"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/gedcom"
+	"github.com/yunfengsa/pure-genealogy/backend/internal/photo"
 	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
@@ -86,6 +88,87 @@ type fakeMembers struct {
 	updateMarriage func(ctx context.Context, id int64, input domain.MarriageInput) (domain.Marriage, error)
 	deleteMarriage func(ctx context.Context, id int64) error
 	replaceSpouses func(ctx context.Context, memberID int64, spouseIDs []int64, note *string) error
+
+	// 成员照片
+	photos           func(ctx context.Context, memberID int64) ([]domain.MemberPhoto, error)
+	addPhoto         func(ctx context.Context, input domain.MemberPhotoInput) (domain.MemberPhoto, error)
+	deletePhoto      func(ctx context.Context, id int64) (string, string, error)
+	photosForMembers func(ctx context.Context, memberIDs []int64) ([]string, error)
+	updateCaption    func(ctx context.Context, id int64, caption *string) (domain.MemberPhoto, error)
+}
+
+func (f *fakeMembers) ListMemberPhotos(ctx context.Context, memberID int64) ([]domain.MemberPhoto, error) {
+	if f.photos == nil {
+		return []domain.MemberPhoto{}, nil
+	}
+	return f.photos(ctx, memberID)
+}
+
+func (f *fakeMembers) AddMemberPhoto(ctx context.Context, input domain.MemberPhotoInput) (domain.MemberPhoto, error) {
+	if f.addPhoto == nil {
+		return domain.MemberPhoto{ID: 1, MemberID: input.MemberID}, nil
+	}
+	return f.addPhoto(ctx, input)
+}
+
+func (f *fakeMembers) GetMemberPhoto(ctx context.Context, id int64) (domain.MemberPhoto, error) {
+	return domain.MemberPhoto{ID: id}, nil
+}
+
+func (f *fakeMembers) DeleteMemberPhoto(ctx context.Context, id int64) (string, string, error) {
+	if f.deletePhoto == nil {
+		return "", "", nil
+	}
+	return f.deletePhoto(ctx, id)
+}
+
+func (f *fakeMembers) ListPhotosForMembers(ctx context.Context, memberIDs []int64) ([]string, error) {
+	if f.photosForMembers == nil {
+		return nil, nil
+	}
+	return f.photosForMembers(ctx, memberIDs)
+}
+
+func (f *fakeMembers) UpdatePhotoCaption(ctx context.Context, id int64, caption *string) (domain.MemberPhoto, error) {
+	if f.updateCaption == nil {
+		return domain.MemberPhoto{ID: id, Caption: caption}, nil
+	}
+	return f.updateCaption(ctx, id, caption)
+}
+
+// stubPhotos 是内存版照片存储，记录写入与删除但不落盘。
+type stubPhotos struct {
+	root    string
+	saved   []photo.Stored
+	deleted []string
+	err     error
+}
+
+func (s *stubPhotos) Save(memberID int64, src io.Reader, size int64) (photo.Stored, error) {
+	if s.err != nil {
+		return photo.Stored{}, s.err
+	}
+	stored := photo.Stored{
+		OriginalPath:  fmt.Sprintf("%d/original.jpg", memberID),
+		ThumbnailPath: fmt.Sprintf("%d/original.thumb.jpg", memberID),
+		Width:         1200,
+		Height:        800,
+		ByteSize:      4096,
+	}
+	s.saved = append(s.saved, stored)
+	return stored, nil
+}
+
+func (s *stubPhotos) Delete(relativePaths ...string) error {
+	s.deleted = append(s.deleted, relativePaths...)
+	return nil
+}
+
+func (s *stubPhotos) Root() string {
+	if s.root == "" {
+		return "."
+	}
+	return s.root
 }
 
 func (f *fakeMembers) ListMembers(ctx context.Context, page, pageSize int, search string) ([]domain.Member, int, error) {
@@ -223,14 +306,14 @@ func (f fakePinger) Ping(context.Context) error { return f.err }
 func testServer(t *testing.T, authenticator Authenticator, members MemberStore, pinger Pinger) *Server {
 	t.Helper()
 	cfg := config.Config{
-		AppOrigin:        "http://app.test",
-		AppOrigins:       []string{"http://app.test"},
-		FamilySurname:    "刘",
-		SessionTTL:   time.Hour,
-		CookieSecure: "false",
+		AppOrigin:     "http://app.test",
+		AppOrigins:    []string{"http://app.test"},
+		FamilySurname: "刘",
+		SessionTTL:    time.Hour,
+		CookieSecure:  "false",
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	server := New(cfg, authenticator, members, pinger, logger)
+	server := New(cfg, authenticator, members, &stubPhotos{}, pinger, logger)
 	server.now = func() time.Time { return time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC) }
 	return server
 }
@@ -780,5 +863,114 @@ func TestMemberSpouseIDsTriggerReplace(t *testing.T) {
 	}, nil, authCookie())
 	if unchanged.Code != http.StatusCreated || replaced != nil {
 		t.Fatalf("未提供 spouse_ids 时不应修改婚姻：%d %v", unchanged.Code, replaced)
+	}
+}
+
+func TestListMemberPhotosExposesURLs(t *testing.T) {
+	members := &fakeMembers{
+		photos: func(_ context.Context, memberID int64) ([]domain.MemberPhoto, error) {
+			return []domain.MemberPhoto{
+				{
+					ID: 1, MemberID: memberID,
+					URL: "5/abc.jpg", ThumbURL: "5/abc.thumb.jpg",
+					Width: 800, Height: 600,
+				},
+			}, nil
+		},
+	}
+	server := testServer(t, authenticatedAuth(), members, fakePinger{})
+	response := perform(t, server, http.MethodGet, "/api/family-members/5/photos", nil, nil, authCookie())
+	if response.Code != http.StatusOK {
+		t.Fatalf("读取照片失败：%d %s", response.Code, response.Body.String())
+	}
+	body := response.Body.String()
+	// 前端拿到的是可访问 URL，而不是磁盘相对路径。
+	if !strings.Contains(body, "/api/photos/5/abc.jpg") {
+		t.Fatalf("应返回照片 URL：%s", body)
+	}
+	if !strings.Contains(body, "/api/photos/5/abc.thumb.jpg") {
+		t.Fatalf("应返回缩略图 URL：%s", body)
+	}
+	if strings.Contains(body, `"url":"5/abc.jpg"`) {
+		t.Fatalf("不应暴露原始相对路径：%s", body)
+	}
+}
+
+func TestUploadPhotoRequiresMember(t *testing.T) {
+	members := &fakeMembers{
+		get: func(_ context.Context, _ int64) (domain.Member, error) {
+			return domain.Member{}, domain.ErrNotFound
+		},
+	}
+	server := testServer(t, authenticatedAuth(), members, fakePinger{})
+	// 没有 multipart 内容也应该先因为成员不存在而失败。
+	response := perform(t, server, http.MethodPost, "/api/family-members/999/photos", nil, nil, authCookie())
+	if response.Code == http.StatusCreated {
+		t.Fatalf("不存在的成员不应允许上传：%s", response.Body.String())
+	}
+}
+
+func TestDeletePhotoRemovesRecordAndFile(t *testing.T) {
+	photos := &stubPhotos{}
+	var deletedID int64
+	members := &fakeMembers{
+		deletePhoto: func(_ context.Context, id int64) (string, string, error) {
+			deletedID = id
+			return "5/abc.jpg", "5/abc.thumb.jpg", nil
+		},
+	}
+	server := testServer(t, authenticatedAuth(), members, fakePinger{})
+	server.photos = photos
+	response := perform(t, server, http.MethodDelete, "/api/photos/42", nil, nil, authCookie())
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("删除照片失败：%d %s", response.Code, response.Body.String())
+	}
+	if deletedID != 42 {
+		t.Fatalf("删除的照片 ID 错误：%d", deletedID)
+	}
+	// 磁盘上的原图与缩略图都要清理。
+	if len(photos.deleted) != 2 {
+		t.Fatalf("应删除两个文件，实际 %v", photos.deleted)
+	}
+}
+
+func TestUpdatePhotoCaptionValidation(t *testing.T) {
+	members := &fakeMembers{}
+	server := testServer(t, authenticatedAuth(), members, fakePinger{})
+	tooLong := strings.Repeat("字", 201)
+	response := perform(t, server, http.MethodPut, "/api/photos/1", map[string]any{
+		"caption": tooLong,
+	}, nil, authCookie())
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("超长说明应被拒绝：%d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestPhotoRoutesDoNotShadowStaticFallback(t *testing.T) {
+	// 回归：PhotoURLPrefix 为空时曾把照片路由注册成 "GET /"，
+	// 覆盖静态资源兜底，导致公开的登录页返回 401。
+	cfg := config.Config{
+		AppOrigin:     "http://app.test",
+		AppOrigins:    []string{"http://app.test"},
+		FamilySurname: "刘",
+		SessionTTL:    time.Hour,
+		CookieSecure:  "false",
+		// PhotoURLPrefix 故意留空，模拟手工构造的配置。
+	}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	server := New(cfg, authenticatedAuth(), &fakeMembers{}, &stubPhotos{}, fakePinger{}, logger)
+	server.SetStaticHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("static:" + r.URL.Path))
+	}))
+
+	publicPage := perform(t, server, http.MethodGet, "/auth/login/", nil, nil)
+	if publicPage.Code != http.StatusOK {
+		t.Fatalf("照片路由不应拦截公开页面：%d %s", publicPage.Code, publicPage.Body.String())
+	}
+	// 照片路径仍应要求登录。
+	photoPath := perform(t, server, http.MethodGet, "/api/photos/1/abc.jpg", nil, nil)
+	if photoPath.Code != http.StatusUnauthorized {
+		t.Fatalf("未登录读取照片应返回 401：%d", photoPath.Code)
 	}
 }

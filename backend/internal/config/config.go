@@ -23,15 +23,23 @@ type Config struct {
 	Port          int
 	AppOrigin     string
 	// AppOrigins 是允许的浏览器来源集合，来自 APP_ORIGIN 的逗号分隔列表。
-	AppOrigins       []string
-	SessionTTL       time.Duration
-	BcryptCost       int
-	AllowSignup      bool
-	AutoMigrate      bool
-	CookieSecure     string
-	AdminUsername    string
-	AdminPassword    string
-	LogLevel         slog.Level
+	AppOrigins    []string
+	SessionTTL    time.Duration
+	BcryptCost    int
+	AllowSignup   bool
+	AutoMigrate   bool
+	CookieSecure  string
+	AdminUsername string
+	AdminPassword string
+	LogLevel      slog.Level
+	// PhotoStorageDir 是成员照片的存储根目录，原图与缩略图按成员分子目录存放。
+	PhotoStorageDir string
+	// PhotoMaxBytes 是单张照片的上传大小上限（字节）。
+	PhotoMaxBytes int64
+	// PhotoURLPrefix 是照片对外暴露的 URL 前缀，默认 /api/photos。
+	PhotoURLPrefix string
+	// PhotoThumbnailMaxEdge 是缩略图最长边的像素上限。
+	PhotoThumbnailMaxEdge int
 }
 
 type env map[string]string
@@ -53,16 +61,38 @@ func LoadFrom(environ []string) (Config, error) {
 	}
 
 	cfg := Config{
-		DatabaseURL:      e.get("DATABASE_URL"),
-		FamilySurname:    "刘",
-		Host:             "127.0.0.1",
-		Port:             8080,
-		SessionTTL:   720 * time.Hour,
-		BcryptCost:   12,
-		AllowSignup:  true,
-		AutoMigrate:  true,
-		CookieSecure: "auto",
-		LogLevel:     slog.LevelInfo,
+		DatabaseURL:   e.get("DATABASE_URL"),
+		FamilySurname: "刘",
+		Host:          "127.0.0.1",
+		Port:          8080,
+		SessionTTL:    720 * time.Hour,
+		BcryptCost:    12,
+		AllowSignup:   true,
+		AutoMigrate:   true,
+		CookieSecure:  "auto",
+		LogLevel:      slog.LevelInfo,
+		// 默认把照片放在仓库同级的 data/photos（容器内由 compose 挂载）。
+		PhotoStorageDir:       e.get("PHOTO_STORAGE_DIR"),
+		PhotoMaxBytes:         10 << 20,
+		PhotoURLPrefix:        "/api/photos",
+		PhotoThumbnailMaxEdge: 480,
+	}
+	if cfg.PhotoStorageDir == "" {
+		cfg.PhotoStorageDir = "data/photos"
+	}
+	if raw := e.get("PHOTO_MAX_BYTES"); raw != "" {
+		size, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || size < 64<<10 || size > 50<<20 {
+			return Config{}, errors.New("PHOTO_MAX_BYTES 必须是 65536 到 52428800 之间的整数")
+		}
+		cfg.PhotoMaxBytes = size
+	}
+	if raw := e.get("PHOTO_THUMBNAIL_MAX_EDGE"); raw != "" {
+		edge, err := strconv.Atoi(raw)
+		if err != nil || edge < 64 || edge > 2048 {
+			return Config{}, errors.New("PHOTO_THUMBNAIL_MAX_EDGE 必须是 64 到 2048 之间的整数")
+		}
+		cfg.PhotoThumbnailMaxEdge = edge
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, errors.New("缺少 DATABASE_URL（PostgreSQL 连接字符串）")

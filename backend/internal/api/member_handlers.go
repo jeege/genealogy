@@ -298,10 +298,27 @@ func (s *Server) handleDeleteMembers(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// 先取照片路径：删除成员后 member_photos 会被级联删掉，那时就查不到了。
+	var photoPaths []string
+	if s.photos != nil {
+		paths, err := s.members.ListPhotosForMembers(r.Context(), request.IDs)
+		if err != nil {
+			s.logger.Warn("读取待删除成员的照片失败", "error", err)
+		} else {
+			photoPaths = paths
+		}
+	}
+
 	deleted, err := s.members.DeleteMembers(r.Context(), request.IDs)
 	if err != nil {
 		s.handleError(w, err, "删除成员")
 		return
+	}
+	// 成员删成功后再清理磁盘；文件残留只记日志，不影响接口结果。
+	if len(photoPaths) > 0 && s.photos != nil {
+		if err := s.photos.Delete(photoPaths...); err != nil {
+			s.logger.Warn("删除成员照片文件失败", "error", err)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "deleted": deleted})
 }

@@ -23,6 +23,7 @@ import (
 	"github.com/yunfengsa/pure-genealogy/backend/internal/config"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/database"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/domain"
+	"github.com/yunfengsa/pure-genealogy/backend/internal/photo"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/store"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/web"
 )
@@ -128,7 +129,13 @@ func runServe() error {
 		return err
 	}
 
-	httpAPI := api.New(cfg, authService, repository, db, logger)
+	photoStore, err := photo.NewStore(cfg.PhotoStorageDir, cfg.PhotoThumbnailMaxEdge)
+	if err != nil {
+		return fmt.Errorf("初始化照片存储失败：%w", err)
+	}
+	logger.Info("照片存储已就绪", "dir", cfg.PhotoStorageDir, "max_bytes", cfg.PhotoMaxBytes)
+
+	httpAPI := api.New(cfg, authService, repository, photoStore, db, logger)
 	staticFS, err := web.EmbeddedFS()
 	if err != nil {
 		return fmt.Errorf("加载内嵌前端失败：%w", err)

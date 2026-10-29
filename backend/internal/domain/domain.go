@@ -245,6 +245,34 @@ type Marriage struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+// MemberPhoto 是成员的一张照片。
+//
+// 数据库只存相对路径，URL 由 API 层按 PhotoURLPrefix 拼出，
+// 这样更换存储根目录或反向代理前缀都不需要刷库。
+type MemberPhoto struct {
+	ID        int64     `json:"id"`
+	MemberID  int64     `json:"member_id"`
+	URL       string    `json:"url"`
+	ThumbURL  string    `json:"thumbnail_url"`
+	Width     int       `json:"width"`
+	Height    int       `json:"height"`
+	ByteSize  int64     `json:"byte_size"`
+	Caption   *string   `json:"caption"`
+	SortOrder int       `json:"sort_order"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// MemberPhotoInput 是保存照片时的元信息（路径来自存储层）。
+type MemberPhotoInput struct {
+	MemberID      int64
+	OriginalPath  string
+	ThumbnailPath string
+	Width         int
+	Height        int
+	ByteSize      int64
+	Caption       *string
+}
+
 // MarriageInput 是新增或更新配偶关系的输入。
 type MarriageInput struct {
 	HusbandID     int64

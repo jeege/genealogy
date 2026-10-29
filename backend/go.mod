@@ -5,6 +5,7 @@ go 1.24.0
 require (
 	github.com/jackc/pgx/v5 v5.7.6
 	golang.org/x/crypto v0.37.0
+	golang.org/x/image v0.19.0
 	golang.org/x/text v0.24.0
 )
 

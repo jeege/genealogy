@@ -3,14 +3,17 @@ package api
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/yunfengsa/pure-genealogy/backend/internal/auth"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/config"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/domain"
 	"github.com/yunfengsa/pure-genealogy/backend/internal/gedcom"
+	"github.com/yunfengsa/pure-genealogy/backend/internal/photo"
 )
 
 // SessionCookieName 是浏览器与服务端共享的会话 Cookie 名称。
@@ -47,6 +50,20 @@ type MemberStore interface {
 	UpdateMarriage(ctx context.Context, id int64, input domain.MarriageInput) (domain.Marriage, error)
 	DeleteMarriage(ctx context.Context, id int64) error
 	ReplaceSpouses(ctx context.Context, memberID int64, spouseIDs []int64, note *string) error
+
+	ListMemberPhotos(ctx context.Context, memberID int64) ([]domain.MemberPhoto, error)
+	AddMemberPhoto(ctx context.Context, input domain.MemberPhotoInput) (domain.MemberPhoto, error)
+	GetMemberPhoto(ctx context.Context, id int64) (domain.MemberPhoto, error)
+	DeleteMemberPhoto(ctx context.Context, id int64) (string, string, error)
+	ListPhotosForMembers(ctx context.Context, memberIDs []int64) ([]string, error)
+	UpdatePhotoCaption(ctx context.Context, id int64, caption *string) (domain.MemberPhoto, error)
+}
+
+// PhotoStore 是照片文件的落盘能力。
+type PhotoStore interface {
+	Save(memberID int64, src io.Reader, size int64) (photo.Stored, error)
+	Delete(relativePaths ...string) error
+	Root() string
 }
 
 // Pinger 用于健康检查，生产环境由数据库连接池实现。
@@ -59,17 +76,21 @@ type Server struct {
 	cfg     config.Config
 	auth    Authenticator
 	members MemberStore
+	photos  PhotoStore
 	pinger  Pinger
 	logger  *slog.Logger
 	mux     *http.ServeMux
 	static  http.Handler
-	now     func() time.Time
+	// photoFiles 以照片根目录为根提供静态文件读取。
+	photoFiles http.Handler
+	now        func() time.Time
 }
 
 func New(
 	cfg config.Config,
 	authenticator Authenticator,
 	members MemberStore,
+	photos PhotoStore,
 	pinger Pinger,
 	logger *slog.Logger,
 ) *Server {
@@ -80,6 +101,7 @@ func New(
 		cfg:     cfg,
 		auth:    authenticator,
 		members: members,
+		photos:  photos,
 		pinger:  pinger,
 		logger:  logger,
 		mux:     http.NewServeMux(),
@@ -123,6 +145,23 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /api/marriages", s.requireAuth(http.HandlerFunc(s.handleCreateMarriage)))
 	s.mux.Handle("PUT /api/marriages/{id}", s.requireAuth(http.HandlerFunc(s.handleUpdateMarriage)))
 	s.mux.Handle("DELETE /api/marriages/{id}", s.requireAuth(http.HandlerFunc(s.handleDeleteMarriage)))
+
+	s.mux.Handle("GET /api/family-members/{id}/photos", s.requireAuth(http.HandlerFunc(s.handleListMemberPhotos)))
+	s.mux.Handle("POST /api/family-members/{id}/photos", s.requireAuth(http.HandlerFunc(s.handleUploadMemberPhotos)))
+	s.mux.Handle("DELETE /api/photos/{photoID}", s.requireAuth(http.HandlerFunc(s.handleDeleteMemberPhoto)))
+	s.mux.Handle("PUT /api/photos/{photoID}", s.requireAuth(http.HandlerFunc(s.handleUpdatePhotoCaption)))
+	// 照片二进制：路径其余部分交给 FileServer，必须注册在 {photoID} 之后，
+	// 但 Go 1.22 的 ServeMux 会优先匹配更具体的模式，两者不冲突。
+	if s.photos != nil {
+		// 前缀必须非空：若配置为空会注册成 "GET /"，把下面的静态资源兜底
+		// 路由整个覆盖掉，导致登录页等公开页面返回 401。
+		prefix := strings.TrimSuffix(s.cfg.PhotoURLPrefix, "/")
+		if prefix == "" {
+			prefix = "/api/photos"
+		}
+		s.photoFiles = http.StripPrefix(prefix, http.FileServer(http.Dir(s.photos.Root())))
+		s.mux.Handle("GET "+prefix+"/", s.requireAuth(http.HandlerFunc(s.handlePhotoFile)))
+	}
 
 	s.mux.Handle("GET /api/statistics", s.requireAuth(http.HandlerFunc(s.handleStatistics)))
 
