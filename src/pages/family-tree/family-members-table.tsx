@@ -604,7 +604,6 @@ export function FamilyMembersTable({
                   aria-label="全选"
                 />
               </TableHead>
-              <TableHead className="w-16">ID</TableHead>
               <TableHead>姓名</TableHead>
               <TableHead className="w-20">世代</TableHead>
               <TableHead className="w-20">排行</TableHead>
@@ -613,7 +612,6 @@ export function FamilyMembersTable({
               <TableHead>生日</TableHead>
               <TableHead>卒年</TableHead>
               <TableHead>居住地</TableHead>
-              <TableHead>官职</TableHead>
               <TableHead className="w-20">在世</TableHead>
               <TableHead>配偶</TableHead>
               <TableHead>生平事迹</TableHead>
@@ -623,7 +621,7 @@ export function FamilyMembersTable({
           <TableBody>
             {initialData.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={15} className="h-24 text-center">
+                <TableCell colSpan={13} className="h-24 text-center">
                   暂无数据
                 </TableCell>
               </TableRow>
@@ -642,7 +640,6 @@ export function FamilyMembersTable({
                       aria-label={`选择 ${member.name}`}
                     />
                   </TableCell>
-                  <TableCell className="font-mono">{member.id}</TableCell>
                   <TableCell className="font-medium">
                     <button
                       type="button"
@@ -691,7 +688,6 @@ export function FamilyMembersTable({
                   <TableCell>{formatDate(member.birthday)}</TableCell>
                   <TableCell>{formatDate(member.death_date)}</TableCell>
                   <TableCell>{member.residence_place ?? "-"}</TableCell>
-                  <TableCell>{member.official_position ?? "-"}</TableCell>
                   <TableCell>{member.is_alive ? "是" : "否"}</TableCell>
                   <TableCell>{formatSpouses(member)}</TableCell>
                   <TableCell>
@@ -872,7 +868,6 @@ function MemberCard({
             {member.name}
           </button>
           <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-            <span className="font-mono">#{member.id}</span>
             {member.gender && <span>{member.gender}</span>}
             {member.generation !== null && <span>第{member.generation}世</span>}
             {member.sibling_order !== null && <span>行{member.sibling_order}</span>}
@@ -918,12 +913,6 @@ function MemberCard({
           <dt className="text-muted-foreground">居住地</dt>
           <dd className="truncate">{member.residence_place || "-"}</dd>
         </div>
-        {member.official_position && (
-          <div className="min-w-0 col-span-2">
-            <dt className="text-muted-foreground">官职</dt>
-            <dd className="truncate">{member.official_position}</dd>
-          </div>
-        )}
       </dl>
 
       <div className="flex items-center justify-between gap-2 border-t pt-2">
