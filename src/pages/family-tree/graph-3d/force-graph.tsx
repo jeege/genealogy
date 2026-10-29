@@ -338,9 +338,12 @@ export function FamilyForceGraph({ data }: ForceGraphProps) {
         // 父子连线用主题文字色，配偶连线用琥珀色虚线以示区分。
         linkColor={(link: any) => (link?.kind === "spouse" ? "rgba(245,158,11,0.55)" : linkColor)}
         linkWidth={(link: any) => (link?.kind === "spouse" ? 1.5 : 1)}
-        // 配偶之间用较短的力距，视觉上贴在一起。
-        linkDirectionalParticles={(link: any) => (link?.kind === "spouse" ? 0 : 2)}
+        // 父子与配偶连线都有方向粒子；配偶线用琥珀色粒子与线色一致。
+        linkDirectionalParticles={2}
         linkDirectionalParticleWidth={2}
+        linkDirectionalParticleColor={(link: any) =>
+          link?.kind === "spouse" ? "rgba(245,158,11,0.9)" : linkColor
+        }
         
         // 节点文字渲染
         nodeThreeObjectExtend={true}
