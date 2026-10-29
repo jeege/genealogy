@@ -7,11 +7,17 @@ import { Badge } from "@/components/ui/badge";
 import { User, BookOpen, ScrollText, ArrowRight, ArrowLeft, X } from "lucide-react";
 import type { FamilyMemberNode } from "./graph/actions";
 import { RichTextViewer } from "@/components/rich-text/viewer";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useCalendar } from "@/lib/calendar/calendar-context";
+import { fetchMemberPhotos } from "@/lib/api/family";
+import type { MemberPhoto } from "@/lib/api/types";
+import {
+  isPhotoLightboxOpen,
+  MemberPhotoEmpty,
+  MemberPhotoGallery,
+} from "./member-photo-gallery";
 
 interface MemberDetailDialogProps {
   isOpen: boolean;
@@ -37,6 +43,29 @@ export function MemberDetailDialog({
 
   const { formatDate } = useCalendar();
 
+  // 照片按需加载：打开详情时才请求，避免列表页就带上图片 URL。
+  const [photos, setPhotos] = useState<MemberPhoto[]>([]);
+  const [photosLoaded, setPhotosLoaded] = useState(false);
+  useEffect(() => {
+    if (!isOpen || !member) {
+      setPhotos([]);
+      setPhotosLoaded(false);
+      return;
+    }
+    let cancelled = false;
+    fetchMemberPhotos(member.id)
+      .then((result) => {
+        if (cancelled) return;
+        setPhotos(result.data);
+      })
+      .finally(() => {
+        if (!cancelled) setPhotosLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, member]);
+
   if (!member) return null;
 
   return (
@@ -45,6 +74,20 @@ export function MemberDetailDialog({
         className="max-w-none w-auto p-0 overflow-visible bg-transparent border-none shadow-none duration-1000 flex items-center justify-center pointer-events-none"
         aria-describedby={undefined}
         showCloseButton={false}
+        // 照片灯箱（PhotoSwipe）渲染在 Dialog 之外，点击它会被判定为
+        // 「与外部交互」从而关掉整个详情弹窗，预览随之消失。
+        // 这里一律拦截外部交互，关闭只通过右上角的 × 或 Esc。
+        onInteractOutside={(event) => event.preventDefault()}
+        // Esc 一次只关一层：
+        // 灯箱（PhotoSwipe）打开时，Esc 应由它自己关闭，详情弹窗保持打开。
+        // Radix 的 useEscapeKeydown 会先调用本回调、再检查 defaultPrevented，
+        // 因此这里 preventDefault() 就能精确阻止弹窗关闭，
+        // 不必依赖 document 上捕获监听的注册顺序（那个方案不可靠）。
+        onEscapeKeyDown={(event) => {
+          if (!isPhotoLightboxOpen()) return;
+          event.preventDefault();
+          // PhotoSwipe 自己的 Esc 处理仍在运行，由它关闭灯箱。
+        }}
       >
         <DialogTitle className="sr-only">{member.name} 详情</DialogTitle>
         
@@ -164,6 +207,19 @@ export function MemberDetailDialog({
                         {member.residence_place || "未记录"}
                       </p>
                     </div>
+
+                    {/* 照片：有图时才占位，避免空成员多出一块区域 */}
+                    {photos.length > 0 && (
+                      <div className="space-y-2">
+                        <span className="text-[10px] sm:text-xs font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider">
+                          照片 · {photos.length}
+                        </span>
+                        <MemberPhotoGallery photos={photos} memberName={member.name} />
+                      </div>
+                    )}
+                    {photosLoaded && photos.length === 0 && (
+                      <MemberPhotoEmpty />
+                    )}
 
                   </div>
                 </div>

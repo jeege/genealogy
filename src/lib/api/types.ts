@@ -140,6 +140,20 @@ export interface GEDCOMImportResult {
   warnings: string[];
 }
 
+/** 成员照片：URL 由后端按存储配置拼好，前端直接用。 */
+export interface MemberPhoto {
+  id: number;
+  member_id: number;
+  url: string;
+  thumbnail_url: string;
+  width: number;
+  height: number;
+  byte_size: number;
+  caption: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
 export type MarriageStatus = "married" | "divorced" | "widowed";
 
 export interface Marriage {

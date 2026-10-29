@@ -8,6 +8,7 @@ import type {
   ImportMemberInput,
   Marriage,
   MarriageInput,
+  MemberPhoto,
   MemberInput,
   MemberOption,
   SpouseLink,
@@ -324,6 +325,83 @@ export async function updateMarriage(
 export async function deleteMarriage(id: number): Promise<{ error: string | null }> {
   try {
     await apiRequest<null>(`/marriages/${id}`, { method: "DELETE" });
+    return { error: null };
+  } catch (error) {
+    return { error: message(error) };
+  }
+}
+
+export async function fetchMemberPhotos(
+  memberId: number,
+): Promise<{ data: MemberPhoto[]; error: string | null }> {
+  try {
+    const payload = await apiRequest<{ data: MemberPhoto[] }>(
+      `/family-members/${memberId}/photos`,
+    );
+    return { data: payload.data ?? [], error: null };
+  } catch (error) {
+    return { data: [], error: message(error) };
+  }
+}
+
+/**
+ * 上传照片。
+ *
+ * 不能复用 `apiRequest`：它会把 Content-Type 固定成 application/json，
+ * 而 multipart 需要浏览器自己带 boundary。这里直接调用 fetch 并手动处理错误。
+ */
+export async function uploadMemberPhotos(
+  memberId: number,
+  files: File[],
+  caption?: string,
+): Promise<{ data: MemberPhoto[]; error: string | null }> {
+  const form = new FormData();
+  for (const file of files) form.append("photos", file);
+  if (caption?.trim()) form.append("caption", caption.trim());
+
+  try {
+    const response = await fetch(`/api/family-members/${memberId}/photos`, {
+      method: "POST",
+      body: form,
+      credentials: "same-origin",
+    });
+    if (!response.ok) {
+      let errorMessage = `上传失败（HTTP ${response.status}）`;
+      try {
+        const payload = (await response.json()) as { error?: string };
+        if (payload?.error) errorMessage = payload.error;
+      } catch {
+        // 响应不是 JSON 时保留默认文案。
+      }
+      return { data: [], error: errorMessage };
+    }
+    const payload = (await response.json()) as { data: MemberPhoto[] };
+    return { data: payload.data ?? [], error: null };
+  } catch {
+    return { data: [], error: "无法连接服务器，请稍后重试" };
+  }
+}
+
+export async function deleteMemberPhoto(
+  photoId: number,
+): Promise<{ error: string | null }> {
+  try {
+    await apiRequest<null>(`/photos/${photoId}`, { method: "DELETE" });
+    return { error: null };
+  } catch (error) {
+    return { error: message(error) };
+  }
+}
+
+export async function updatePhotoCaption(
+  photoId: number,
+  caption: string,
+): Promise<{ error: string | null }> {
+  try {
+    await apiRequest<{ data: MemberPhoto }>(`/photos/${photoId}`, {
+      method: "PUT",
+      body: JSON.stringify({ caption }),
+    });
     return { error: null };
   } catch (error) {
     return { error: message(error) };

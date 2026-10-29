@@ -165,3 +165,46 @@
   align-items: center;
   justify-content: space-between;
 }
+
+/* PhotoSwipe 灯箱：确保容器接管触摸手势，避免被页面滚动/缩放抢走。
+   PhotoSwipe 自带 touch-action: none，这里额外禁止浏览器手势缩放与回弹，
+   让双指缩放完全由灯箱处理（iOS Safari 上尤其需要）。 */
+.pswp {
+  touch-action: none;
+  overscroll-behavior: contain;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  /* 关键：Radix Dialog（modal）会给 <body> 设 pointer-events: none，
+     而 PhotoSwipe 挂在 body 下会继承这个状态，导致灯箱收不到任何指针/触摸
+     事件——双指捏合因此被浏览器当作页面缩放处理。
+     这里显式恢复，让灯箱自身可交互。 */
+  pointer-events: auto;
+}
+
+
+.pswp__img {
+  /* 放大后保持清晰；PhotoSwipe 会按 zoomLevel 设置实际尺寸。 */
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+/* PhotoSwipe 灯箱的自定义标题（见 member-photo-gallery.tsx 注册的 photo-caption）。
+   PhotoSwipe 只在 JS 加载后插入这段 DOM，因此样式放在全局而非组件内。 */
+.pswp__photo-caption {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  padding: 1rem 1.5rem;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent);
+  color: #fff;
+  font-size: 0.875rem;
+  text-align: center;
+  pointer-events: none;
+}
+
+.pswp__photo-caption.pswp__caption--empty {
+  display: none;
+}
