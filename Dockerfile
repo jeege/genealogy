@@ -17,10 +17,12 @@ RUN mkdir -p /out && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata \
   && addgroup -S genealogy \
-  && adduser -S -G genealogy genealogy
+  && adduser -S -G genealogy genealogy \
+  && mkdir -p /data/photos \
+  && chown -R genealogy:genealogy /data
 COPY --from=build /out/genealogy-server /usr/local/bin/genealogy-server
 USER genealogy
-ENV API_HOST=0.0.0.0 API_PORT=8080
+ENV API_HOST=0.0.0.0 API_PORT=8080 PHOTO_STORAGE_DIR=/data/photos
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD ["genealogy-server", "healthcheck"]
 ENTRYPOINT ["genealogy-server", "serve"]

@@ -17,6 +17,12 @@ services:
       ADMIN_USERNAME: ${ADMIN_USERNAME:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # 成员照片：容器内路径固定，宿主机通过 volumes 持久化。
+      PHOTO_STORAGE_DIR: /data/photos
+      PHOTO_MAX_BYTES: ${PHOTO_MAX_BYTES:-10485760}
+      PHOTO_THUMBNAIL_MAX_EDGE: ${PHOTO_THUMBNAIL_MAX_EDGE:-480}
+    volumes:
+      - photo-data:/data/photos
     depends_on:
       db:
         condition: service_healthy
@@ -47,3 +53,4 @@ services:
 
 volumes:
   db-data:
+  photo-data:

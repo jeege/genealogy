@@ -49,3 +49,7 @@ next-env.d.ts
 /backend/internal/web/dist/*
 !/backend/internal/web/dist/.gitkeep
 /pure-genealogy
+
+# 本地运行时的成员照片存储（默认 PHOTO_STORAGE_DIR=data/photos）
+/backend/data/
+/data/

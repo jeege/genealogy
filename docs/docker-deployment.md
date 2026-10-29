@@ -161,17 +161,40 @@ docker compose --env-file .env.self-hosted exec app \
 
 ### 备份
 
+数据库与成员照片**分开备份**：照片以文件形式存放在 `photo-data` 卷里，
+`pg_dump` 不会包含它们。
+
 ```bash
+# 1) 数据库
 docker compose --env-file .env.self-hosted exec -T db \
   pg_dump -U genealogy -Fc genealogy > genealogy-$(date +%F).dump
+
+# 2) 照片目录
+docker run --rm \
+  -v genealogy_photo-data:/photos:ro \
+  -v "$PWD":/backup \
+  alpine tar czf /backup/photos-$(date +%F).tar.gz -C /photos .
 ```
+
+> 卷的实际名称带 Compose 项目前缀，可用 `docker volume ls` 确认。
 
 ### 恢复
 
+建议先停应用，恢复完再启动，避免恢复过程中有请求写入。
+
 ```bash
 docker compose --env-file .env.self-hosted stop app
+
+# 1) 数据库
 docker compose --env-file .env.self-hosted exec -T db \
   pg_restore -U genealogy -d genealogy --clean --if-exists < genealogy-2026-10-26.dump
+
+# 2) 照片目录（可选，按需恢复）
+docker run --rm \
+  -v genealogy_photo-data:/photos \
+  -v "$PWD":/backup \
+  alpine sh -c 'rm -rf /photos/* && tar xzf /backup/photos-2026-10-26.tar.gz -C /photos'
+
 docker compose --env-file .env.self-hosted start app
 ```
 

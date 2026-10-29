@@ -103,11 +103,40 @@
 | `GET` | `/api/family-members/gedcom` | 导出 GEDCOM 5.5.1 文件（`attachment`） |
 | `POST` | `/api/family-members/gedcom/preview` | 预览 GEDCOM 规模、告警与未映射标签 |
 | `POST` | `/api/family-members/gedcom/import` | 事务内导入 GEDCOM，可 `replace` |
+| `GET` | `/api/family-members/{id}/photos` | 某成员的照片列表（含 `url`/`thumbnail_url`） |
+| `POST` | `/api/family-members/{id}/photos` | 上传照片（`multipart/form-data`，字段 `photos` 可多值） |
+| `PUT` | `/api/photos/{photoID}` | 修改照片说明 `{caption}` |
+| `DELETE` | `/api/photos/{photoID}` | 删除照片（同时清理磁盘文件） |
+| `GET` | `/api/photos/{memberID}/{file}` | 照片原图/缩略图二进制，需登录 |
 | `GET` | `/api/statistics` | 统计仪表盘数据 |
 
 成员可空字段使用 `null`；日期格式为 `YYYY-MM-DD`。
 更新时 `father_id: null` 表示清空父亲。后端会校验父亲存在、禁止自引用，
 并用递归查询阻止父子关系成环。
+
+### 成员照片
+
+一位成员可以挂多张照片，**原图保留原样**（不重编码，保留 EXIF），同时生成缩略图：
+
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `PHOTO_STORAGE_DIR` | `data/photos` | 照片根目录；容器内为 `/data/photos` |
+| `PHOTO_MAX_BYTES` | `10485760`（10 MB） | 单张大小上限，允许 64 KB ~ 50 MB |
+| `PHOTO_THUMBNAIL_MAX_EDGE` | `480` | 缩略图最长边像素，允许 64 ~ 2048 |
+
+- 磁盘布局：`<根目录>/<成员ID>/<随机token>.<ext>` 与 `.thumb.<ext>`；
+  文件名用随机 token，不复用原始文件名，避免路径穿越与重名覆盖。
+- 数据库 `member_photos` 只存**相对路径**，URL 由 API 按前缀拼出，
+  换存储位置或反代前缀不需要刷库。
+- 缩略图按最长边等比缩放（CatmullRom），JPEG/PNG 保持原格式，
+  GIF/WebP 转 JPEG 并铺白底；带透明通道的图不会变黑。
+- 不支持格式、像素过多（> 8000 万）、超出大小上限都会返回 400 且不留残文件。
+- 批量上传中途失败会回滚已入库的记录与文件；删除成员时其照片文件一并清理。
+- 上传走 `multipart/form-data`，前端不复用 JSON 客户端（那会固定 Content-Type）。
+- 前端预览用 **PhotoSwipe**（`photoswipe` 5.x）灯箱：自带手势缩放、滑动切换、
+  键盘导航；**动态导入**（`import("photoswipe/lightbox")` + CSS 按需加载），
+  只有首次点开大图才加载约 60KB 核心库，不计入首屏包体。
+  PhotoSwipe 5 不自带标题，通过 `uiRegister` 注册 `photo-caption` 元素显示照片说明。
 
 ### 配偶关系
 

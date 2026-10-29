@@ -149,6 +149,18 @@ useEffect(() => { /* 重新拉取 */ }, [page, search, version]);
 - `family_members.spouse` 文本备注列已移除（迁移 `005_drop_member_spouse.sql`），配偶只能通过 `marriages` 表达。
 - 编辑入口 `src/pages/family-tree/spouse-editor.tsx`；API 见 `POST /api/marriages` 等。
 
+### 成员照片 (`backend/internal/photo/`)
+- 一位成员可挂多张照片：原图**原样落盘**（不重编码、保留 EXIF），另生成缩略图。
+- 存储布局 `<PHOTO_STORAGE_DIR>/<成员ID>/<随机token>.<ext>`，文件名用随机 token，
+  不复用原始文件名（防路径穿越与覆盖）；数据库 `member_photos` 只存相对路径，
+  URL 由 API 按 `PhotoURLPrefix` 拼出。
+- 缩略图最长边 `PHOTO_THUMBNAIL_MAX_EDGE`（默认 480），CatmullRom 等比缩放；
+  JPEG/PNG 保持格式，GIF/WebP 转 JPEG 并铺白底。
+- 上传 `POST /api/family-members/{id}/photos`（multipart，字段 `photos` 可多值）；
+  前端不能用 JSON 客户端（会固定 Content-Type），见 `uploadMemberPhotos`。
+- 照片路由注册时前缀必须非空：空值会注册成 `GET /` 覆盖静态兜底，让登录页 401。
+- 前端：编辑表单 `member-photo-editor.tsx`，详情展示 `member-photo-gallery.tsx`。
+
 ### GEDCOM 导入导出 (`backend/internal/gedcom/`)
 - 解析 GEDCOM 5.5.1 子集：`INDI`、`FAM`、`NAME`/`SEX`/`BIRT`/`DEAT`/`NOTE`/`OCCU`/`RESI`，
   扩展标签 `_GENC`/`_SIBO`/`_ALIV`（旧版 `_SPO` 仅识别并忽略）；`HUSB`/`WIFE` + `MARR`/`DIV` 映射为婚姻记录。
