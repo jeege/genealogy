@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -31,6 +32,10 @@ jobs:
 
       - name: 计算并推送新标签
         run: |
+          # 附注标签需要一个提交者身份，runner 默认未配置
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git fetch --tags --quiet origin
 
           # 只认形如 v1.2.3 / v0.1 的语义化标签，取版本号最大的一个
