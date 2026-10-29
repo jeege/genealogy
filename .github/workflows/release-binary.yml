@@ -31,11 +31,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
       - name: 缓存 Go 模块
         uses: actions/cache@v4
         with:
           path: .cache/go-mod
           key: ${{ runner.os }}-go-mod-${{ hashFiles('backend/go.sum') }}
+
+      # 构建前端静态产物并复制进 backend/internal/web/dist，
+      # Go 通过 //go:embed all:dist 将其内嵌进二进制。
+      - name: 构建并内嵌前端静态资源
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
 
       - name: 构建二进制
         working-directory: backend
@@ -44,6 +56,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
           GOCACHE: ${{ runner.temp }}/go-build
+          GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
         run: |
           OUT="genealogy-server-${{ matrix.goos }}-${{ matrix.goarch }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
