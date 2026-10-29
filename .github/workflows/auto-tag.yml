@@ -1,0 +1,61 @@
+name: 合并到 main 时自动打标签
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+# 同一时间只允许一个打标签任务，避免并发合并时算出重复版本号
+concurrency:
+  group: auto-tag
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    env:
+      # 未配置 REPO_PUSH_TOKEN 时退回 GITHUB_TOKEN（标签能打上，但不会级联触发镜像构建）
+      PUSH_TOKEN: ${{ secrets.REPO_PUSH_TOKEN != '' && secrets.REPO_PUSH_TOKEN || github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # 需要完整历史与全部标签，才能找到最新的 v* 标签
+          fetch-depth: 0
+          # 用 PAT 检出：GitHub 规定 GITHUB_TOKEN 的 push 不会触发其他工作流，
+          # 自动打的标签要用 PAT 推送，才能触发 docker-image.yml 构建镜像。
+          # 请在仓库 Secrets 中新建 REPO_PUSH_TOKEN（classic PAT，勾选 repo 即可）。
+          token: ${{ env.PUSH_TOKEN }}
+
+      - name: 计算并推送新标签
+        run: |
+          git fetch --tags --quiet origin
+
+          # 只认形如 v1.2.3 / v0.1 的语义化标签，取版本号最大的一个
+          latest="$(git tag -l 'v*' --sort=-v:refname | head -n 1)"
+
+          if [ -z "$latest" ]; then
+            next="v0.1.0"
+          else
+            # 去掉前缀 v 后按 . 拆分，缺 minor/patch 的补 0；
+            # v0.1 -> 0.1.0 -> 递增 patch -> v0.1.1
+            core="${latest#v}"
+            IFS='.' read -r major minor patch <<< "$core"
+            major="${major:-0}"; minor="${minor:-0}"; patch="${patch:-0}"
+            next="v${major}.${minor}.$((patch + 1))"
+          fi
+
+          # 若最新标签已指向本次提交（例如打标签本身触发的推送），跳过
+          if [ "$(git rev-parse "refs/tags/${latest:-v-none}^{commit}" 2>/dev/null)" = "$(git rev-parse HEAD)" ]; then
+            echo "标签 ${latest} 已指向当前提交，无需打标签"
+            exit 0
+          fi
+
+          echo "最新标签: ${latest:-无}，新标签: ${next}"
+          git tag -a "$next" -m "自动发布：${next}（合并至 main）"
+          git push origin "$next"
+
+      - name: 汇总
+        run: echo "已自动打标签并触发 Docker 镜像发布（v* 标签工作流）"

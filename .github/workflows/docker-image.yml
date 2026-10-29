@@ -2,19 +2,13 @@ name: 发布 Docker 镜像到 GHCR
 
 on:
   push:
-    branches:
-      - main
+    # 仅在打版本标签时构建镜像；日常提交不再触发，避免 GHCR 里堆积镜像。
     tags:
       - 'v*'
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '.github/instructions/**'
-      - '.github/prompts/**'
   workflow_dispatch:
     inputs:
       version:
-        description: 可选的版本标签（例如 2026.10.26）；留空则使用分支/提交信息
+        description: 可选的版本标签（例如 2026.10.26）；留空则使用 dev 标签
         required: false
         type: string
 
@@ -79,19 +73,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 生成标签与 OCI 元数据：分支、语义化版本、commit sha 与 latest（默认分支）。
+      # 生成标签与 OCI 元数据：只推语义化版本标签（如 1.2.3 与 1.2）。
+      # 不再推 branch/sha 标签，配合关闭 provenance/sbom，
+      # GHCR 里每次发布只留下对应版本的那一条镜像。
       - name: 生成镜像元数据
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ steps.image.outputs.name }}
           tags: |
-            type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix=sha-,format=short
             type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' && inputs.version != '' }}
-            type=raw,value=latest,enable={{is_default_branch}}
+            # 手动触发且未填版本时的兜底标签，避免推出一条没有任何标签的镜像。
+            type=raw,value=dev,enable=${{ github.event_name == 'workflow_dispatch' && inputs.version == '' }}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
           labels: |
             org.opencontainers.image.title=pure-genealogy
             org.opencontainers.image.description=Chinese family genealogy app (React SPA embedded in Go)
@@ -107,8 +103,10 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          provenance: true
-          sbom: true
+          # provenance/sbom 会额外推送 attestation 清单，
+          # 在 GHCR 列表里表现为多条 sha256:… 镜像记录，这里关闭。
+          provenance: false
+          sbom: false
 
       - name: 输出镜像信息
         run: |
