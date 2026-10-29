@@ -72,7 +72,9 @@ function MemberBlock({
   return (
     <div
       className={cn(
-        "flex flex-col items-center gap-1.5 w-full min-w-0",
+        // h-full 让信息块撑满整栏高度：合并节点里主成员内容更高时，
+        // 配偶栏下方的空白也属于该成员，点击才不会冒泡到节点级（会误开主成员详情）。
+        "flex flex-col items-center gap-1.5 w-full min-w-0 h-full",
         clickable && "cursor-pointer rounded-md hover:bg-accent/40 transition-colors",
         compact ? "px-1 py-0.5" : "px-2",
         // 在世状态按成员各自表达：夫妻节点里一方已故不应把另一方一起变灰。

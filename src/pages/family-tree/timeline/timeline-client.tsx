@@ -18,6 +18,7 @@ import { Search, RotateCcw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { TimelineNode, type TimelineNodeData } from "./timeline-node";
 import { YearNode, type YearNodeData } from "./year-node";
+import { useCalendar } from "@/lib/calendar/calendar-context";
 
 interface TimelineMember {
   id: number;
@@ -47,6 +48,16 @@ function TimelineFlow({ initialData }: TimelineClientProps) {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [searchQuery, setSearchQuery] = React.useState("");
   const reactFlowInstance = useReactFlow();
+  const { formatDate } = useCalendar();
+  // 点击条形后在画布角落展示成员详情。用 Panel 而不是 Popover：
+  // Popover 锚定条形自身坐标，放大后条形移出视口，弹层也跟着超出画布。
+  const [detail, setDetail] = React.useState<TimelineNodeData | null>(null);
+
+  const onNodeClick = React.useCallback((_: React.MouseEvent, node: Node) => {
+    setDetail(node.type === "timelineMember" ? (node.data as TimelineNodeData) : null);
+  }, []);
+
+  const onPaneClick = React.useCallback(() => setDetail(null), []);
 
   // Process data and calculate layout
   React.useEffect(() => {
@@ -120,6 +131,8 @@ function TimelineFlow({ initialData }: TimelineClientProps) {
           endYear: member.endYear,
           isAlive: member.isAlive,
           width: Math.max(width, PIXELS_PER_YEAR / 2), // Min width 0.5 year
+          birthdayISO: member.birthdayISO,
+          deathISO: member.deathISO,
         } as TimelineNodeData,
       };
     });
@@ -193,6 +206,8 @@ function TimelineFlow({ initialData }: TimelineClientProps) {
         defaultViewport={{ x: 0, y: 0, zoom: 0.5 }}
         nodesDraggable={false} // Disable dragging logic nodes
         nodesConnectable={false}
+        onNodeClick={onNodeClick}
+        onPaneClick={onPaneClick}
       >
         <Background variant={BackgroundVariant.Lines} gap={PIXELS_PER_YEAR * 10} size={1} className="opacity-20" />
         <Controls 
@@ -216,6 +231,24 @@ function TimelineFlow({ initialData }: TimelineClientProps) {
             </Button>
           </div>
         </Panel>
+        {detail && (
+          <Panel position="bottom-right" className="mb-2 mr-2">
+            <div className="bg-background/95 backdrop-blur-sm border rounded-md shadow-sm px-3 py-2 text-xs max-w-xs">
+              <p className="font-bold text-sm">
+                {detail.name}
+                <span className="font-normal opacity-70 ml-1.5">
+                  （{detail.startYear} - {detail.isAlive ? "至今" : detail.endYear}）
+                </span>
+              </p>
+              {detail.birthdayISO && (
+                <p className="mt-1 text-muted-foreground">{formatDate(detail.birthdayISO)} 生</p>
+              )}
+              {detail.deathISO && (
+                <p className="mt-1 text-muted-foreground">{formatDate(detail.deathISO)} 卒</p>
+              )}
+            </div>
+          </Panel>
+        )}
       </ReactFlow>
     </div>
   );
